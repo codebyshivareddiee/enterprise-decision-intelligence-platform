@@ -1,0 +1,185 @@
+"""Recommendation domain model.
+
+A Recommendation is the output of a completed recommendation workflow
+run. It contains ranked candidates/options, scores, applied rule
+results, and a link to the human-readable explanation produced by the
+Explanation Agent (P10).
+"""
+
+from uuid import UUID
+
+from pydantic import BaseModel, Field
+
+from app.models.base import AuditedModel
+from app.models.enums import RecommendationStatus
+
+
+class RuleEvaluationResult(BaseModel):
+    """Result of evaluating a single BusinessRule against a candidate.
+
+    Attributes:
+        rule_id: ID of the evaluated BusinessRule.
+        rule_name: Name of the rule (denormalised for readability in
+            reports without requiring a join).
+        passed: Whether the candidate satisfied the rule.
+        is_hard_filter: True if this was a HARD_FILTER rule — a
+            ``passed=False`` here unconditionally excluded the
+            candidate.
+        reason: Optional human-readable explanation of the result.
+    """
+
+    rule_id: UUID = Field(..., description="ID of the evaluated BusinessRule.")
+    rule_name: str = Field(
+        ...,
+        min_length=1,
+        max_length=200,
+        description="Rule name (denormalised for audit readability).",
+    )
+    passed: bool = Field(..., description="True if the candidate satisfied the rule.")
+    is_hard_filter: bool = Field(
+        default=False,
+        description="True if this rule was a HARD_FILTER type.",
+    )
+    reason: str | None = Field(
+        default=None,
+        description="Human-readable reason for the pass/fail result.",
+    )
+
+
+class CandidateScore(BaseModel):
+    """AI-generated score and reasoning for a single candidate/option.
+
+    Produced by the Reasoning Agent (P8) and consumed by the
+    Recommendation Agent (P9) to produce a ranked list.
+
+    Attributes:
+        asset_id: ID of the KnowledgeAsset representing this candidate.
+        asset_name: Denormalised candidate name for readability.
+        ai_score: Normalised AI score in [0.0, 1.0] produced by GPT-5
+            reasoning. Only set if the candidate passed all hard filters.
+        final_rank: Position in the final ranked list (1-indexed).
+            ``None`` if the candidate was excluded by hard rules.
+        rule_results: Evaluation result for each BusinessRule applied.
+        reasoning_notes: Free-text reasoning notes from the AI agent
+            explaining why this score was assigned.
+        excluded: Whether this candidate was excluded before AI
+            reasoning (i.e., failed at least one HARD_FILTER rule).
+        exclusion_reason: Human-readable explanation if ``excluded`` is
+            True.
+    """
+
+    asset_id: UUID = Field(
+        ...,
+        description="ID of the KnowledgeAsset representing this candidate.",
+    )
+    asset_name: str = Field(
+        ...,
+        min_length=1,
+        max_length=500,
+        description="Candidate name (denormalised for readability).",
+    )
+    ai_score: float | None = Field(
+        default=None,
+        ge=0.0,
+        le=1.0,
+        description="Normalised AI score [0.0–1.0]. None if excluded before scoring.",
+    )
+    final_rank: int | None = Field(
+        default=None,
+        ge=1,
+        description="Final ranking position (1-indexed). None if excluded.",
+    )
+    rule_results: list[RuleEvaluationResult] = Field(
+        default_factory=list,
+        description="Business rule evaluation results for this candidate.",
+    )
+    reasoning_notes: str | None = Field(
+        default=None,
+        description="Free-text AI reasoning notes for this candidate's score.",
+    )
+    excluded: bool = Field(
+        default=False,
+        description="True if this candidate was excluded by a hard filter rule.",
+    )
+    exclusion_reason: str | None = Field(
+        default=None,
+        description="Explanation of exclusion when excluded=True.",
+    )
+
+
+class Recommendation(AuditedModel):
+    """The output of a completed recommendation workflow run.
+
+    Contains the full ranked candidate list, run metadata, and a
+    reference to the human-readable explanation document. Every
+    recommendation must include an explanation — unexplained results
+    must not be surfaced (see DO_NOT_CHANGE.md).
+
+    Attributes:
+        organization_id: Owning organization — tenant isolation.
+        workspace_id: Workspace this recommendation was produced for.
+        goal: The user-supplied natural-language goal that triggered
+            this recommendation run.
+        status: Current state of the recommendation workflow run.
+        candidates: Scored and ranked candidate list. Includes
+            excluded candidates with their exclusion reasons for
+            auditability.
+        top_n: The number of top candidates surfaced to the user.
+        explanation: Human-readable explanation of the overall
+            recommendation, generated by the Explanation Agent (P10).
+            ``None`` until the explanation is generated; must be set
+            before the recommendation is surfaced to the user.
+        triggered_by: User ID of the person who initiated the run.
+        plan_snapshot: JSON-serialisable snapshot of the execution
+            plan produced by the Planner, stored for auditability.
+        error_message: Human-readable error if ``status`` is
+            ``FAILED``. ``None`` otherwise.
+    """
+
+    organization_id: UUID = Field(
+        ...,
+        description="ID of the owning Organization.",
+    )
+    workspace_id: UUID = Field(
+        ...,
+        description="ID of the Workspace this recommendation is for.",
+    )
+    goal: str = Field(
+        ...,
+        min_length=1,
+        max_length=5000,
+        description="Natural-language goal that triggered this recommendation run.",
+    )
+    status: RecommendationStatus = Field(
+        default=RecommendationStatus.PENDING,
+        description="Current state of the recommendation workflow run.",
+    )
+    candidates: list[CandidateScore] = Field(
+        default_factory=list,
+        description="Scored and ranked candidate list (includes excluded candidates).",
+    )
+    top_n: int = Field(
+        default=5,
+        ge=1,
+        le=100,
+        description="Number of top candidates to surface to the user.",
+    )
+    explanation: str | None = Field(
+        default=None,
+        description=(
+            "Human-readable overall explanation. Must be set before the "
+            "recommendation is surfaced to the user."
+        ),
+    )
+    triggered_by: UUID = Field(
+        ...,
+        description="User ID of the person who initiated this recommendation run.",
+    )
+    plan_snapshot: list[dict[str, object]] = Field(
+        default_factory=list,
+        description="Snapshot of the Planner's execution plan for this run.",
+    )
+    error_message: str | None = Field(
+        default=None,
+        description="Error details if status is FAILED. None otherwise.",
+    )

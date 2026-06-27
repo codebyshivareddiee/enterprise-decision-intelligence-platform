@@ -1,0 +1,79 @@
+"""Application configuration — load and validate environment variables via Pydantic Settings."""
+
+from functools import lru_cache
+from typing import Any
+
+from pydantic import field_validator
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+class Settings(BaseSettings):
+    """Central configuration object.
+
+    All fields are loaded from environment variables (case-insensitive).
+    Secrets must be provided via the environment; they are never hard-coded.
+    """
+
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        case_sensitive=False,
+        extra="ignore",
+    )
+
+    # ── Application ──────────────────────────────────────────────────────────
+    app_env: str = "development"
+    app_host: str = "0.0.0.0"
+    app_port: int = 8000
+    app_debug: bool = True
+    app_log_level: str = "INFO"
+    app_cors_origins: list[str] = ["http://localhost:3000"]
+    secret_key: str = "change-me"
+
+    # ── MongoDB Atlas ────────────────────────────────────────────────────────
+    mongodb_uri: str = "mongodb://localhost:27017"
+    mongodb_db_name: str = "decision_intelligence"
+
+    # ── Qdrant Cloud ─────────────────────────────────────────────────────────
+    qdrant_url: str = "http://localhost:6333"
+    qdrant_api_key: str = ""
+    qdrant_collection_name: str = "knowledge_chunks"
+
+    # ── OpenAI ───────────────────────────────────────────────────────────────
+    openai_api_key: str = ""
+    openai_embedding_model: str = "text-embedding-3-small"
+    openai_chat_model: str = "gpt-4o"
+
+    # ── Feature Flags ────────────────────────────────────────────────────────
+    enable_async_learner: bool = True
+
+    # ── Validators ───────────────────────────────────────────────────────────
+    @field_validator("app_env")
+    @classmethod
+    def validate_env(cls, value: str) -> str:
+        allowed = {"development", "staging", "production"}
+        if value not in allowed:
+            raise ValueError(f"app_env must be one of {allowed}, got: {value!r}")
+        return value
+
+    @field_validator("app_log_level")
+    @classmethod
+    def validate_log_level(cls, value: str) -> str:
+        allowed = {"DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"}
+        upper = value.upper()
+        if upper not in allowed:
+            raise ValueError(f"app_log_level must be one of {allowed}")
+        return upper
+
+    @field_validator("app_cors_origins", mode="before")
+    @classmethod
+    def parse_cors_origins(cls, value: Any) -> list[str]:
+        if isinstance(value, str):
+            return [origin.strip() for origin in value.split(",")]
+        return value  # type: ignore[return-value]
+
+
+@lru_cache(maxsize=1)
+def get_settings() -> Settings:
+    """Return the cached application settings singleton."""
+    return Settings()

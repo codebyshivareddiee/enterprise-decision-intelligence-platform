@@ -1,0 +1,46 @@
+repos:
+  # ── Ruff — linting + formatting (replaces flake8, isort) ──────────────────
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.4.9
+    hooks:
+      - id: ruff
+        args: ["--fix"]
+        types_or: [python, pyi]
+      - id: ruff-format
+        types_or: [python, pyi]
+
+  # ── Black — code formatting ────────────────────────────────────────────────
+  - repo: https://github.com/psf/black
+    rev: 24.4.2
+    hooks:
+      - id: black
+        language_version: python3.11
+
+  # ── mypy — static type checking ───────────────────────────────────────────
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.10.0
+    hooks:
+      - id: mypy
+        args: ["--config-file=pyproject.toml"]
+        additional_dependencies:
+          - pydantic>=2.7.0
+          - pydantic-settings>=2.3.0
+          - structlog>=24.2.0
+          - fastapi>=0.111.0
+        types_or: [python, pyi]
+
+  # ── General file hygiene ──────────────────────────────────────────────────
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.6.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-toml
+      - id: check-json
+      - id: check-merge-conflict
+      - id: check-added-large-files
+        args: ["--maxkb=500"]
+      - id: detect-private-key
+      - id: no-commit-to-branch
+        args: ["--branch", "main"]
