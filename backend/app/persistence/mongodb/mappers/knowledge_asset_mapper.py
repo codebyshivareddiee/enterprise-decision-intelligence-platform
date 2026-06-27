@@ -30,6 +30,7 @@ def to_document(asset: KnowledgeAsset) -> KnowledgeAssetDocument:
         qdrant_point_ids=list(asset.qdrant_point_ids),
         processing_error=asset.processing_error,
         uploaded_by=str(asset.uploaded_by),
+        lifecycle_state=asset.lifecycle_state,
         created_at=asset.created_at,
         updated_at=asset.updated_at,
     )
@@ -50,6 +51,7 @@ def to_domain(doc: KnowledgeAssetDocument) -> KnowledgeAsset:
         qdrant_point_ids=doc["qdrant_point_ids"],
         processing_error=doc["processing_error"],
         uploaded_by=UUID(doc["uploaded_by"]),
+        lifecycle_state=doc.get("lifecycle_state"),
         created_at=doc["created_at"],
         updated_at=doc["updated_at"],
     )

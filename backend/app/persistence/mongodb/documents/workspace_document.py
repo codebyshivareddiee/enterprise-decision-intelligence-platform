@@ -21,7 +21,6 @@ class WorkspaceDocument(TypedDict):
     description: str | None
     status: str                                   # WorkspaceStatus enum value
     knowledge_schema_id: str | None
-    lifecycle_definition_id: str | None
     owner_id: str
     selected_knowledge_asset_ids: list[str]       # UUID strings of selected assets
     qdrant_collection_name: str | None

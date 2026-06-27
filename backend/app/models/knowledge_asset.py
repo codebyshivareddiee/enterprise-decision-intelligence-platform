@@ -102,4 +102,8 @@ class KnowledgeAsset(AuditedModel):
         ...,
         description="User ID of the person who uploaded this asset.",
     )
+    lifecycle_state: str | None = Field(
+        default=None,
+        description="The current lifecycle state of this asset, derived from the schema's initial state upon ingestion.",
+    )
 

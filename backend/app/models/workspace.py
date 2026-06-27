@@ -1,7 +1,7 @@
 """Workspace domain model.
 
 A Workspace is a working environment within an Organization. It ties
-together a KnowledgeSchema, a LifecycleDefinition, and a set of
+together a KnowledgeSchema and a set of
 BusinessRules into a coherent decision-making context.
 
 KnowledgeAssets are organization-owned resources. A Workspace does not
@@ -25,7 +25,7 @@ from app.models.enums import WorkspaceStatus
 class Workspace(AuditedModel):
     """A domain-specific decision-making environment within an Organization.
 
-    All recommendation runs, business rules, lifecycle definitions, and
+    All recommendation runs, business rules, lifecycle definitions (via schema), and
     preference profiles are scoped to a Workspace. Workspaces never share
     knowledge across Organization boundaries (see DO_NOT_CHANGE.md).
 
@@ -40,11 +40,8 @@ class Workspace(AuditedModel):
         description: Optional longer description of the workspace purpose.
         status: Current operational status of the workspace.
         knowledge_schema_id: Reference to the KnowledgeSchema that
-            defines the shape of assets selected into this workspace.
-            ``None`` until a schema is assigned.
-        lifecycle_definition_id: Reference to the LifecycleDefinition
-            controlling decision stages. ``None`` until a lifecycle is
-            assigned.
+            defines the shape of assets selected into this workspace
+            and the lifecycle stages. ``None`` until a schema is assigned.
         owner_id: User ID of the workspace owner / primary analyst.
         selected_knowledge_asset_ids: Ordered list of KnowledgeAsset IDs
             (from the organization library) that this workspace has
@@ -78,10 +75,6 @@ class Workspace(AuditedModel):
     knowledge_schema_id: UUID | None = Field(
         default=None,
         description="ID of the KnowledgeSchema assigned to this workspace.",
-    )
-    lifecycle_definition_id: UUID | None = Field(
-        default=None,
-        description="ID of the LifecycleDefinition for this workspace.",
     )
     owner_id: UUID = Field(
         ...,

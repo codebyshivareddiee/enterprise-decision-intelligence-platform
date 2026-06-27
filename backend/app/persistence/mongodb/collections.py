@@ -26,7 +26,6 @@ CONVERSATIONS: Final[str] = "conversations"
 RECOMMENDATIONS: Final[str] = "recommendations"
 DECISION_HISTORY: Final[str] = "decision_history"
 PREFERENCE_PROFILES: Final[str] = "preference_profiles"
-LIFECYCLE_DEFINITIONS: Final[str] = "lifecycle_definitions"
 
 # Convenience tuple for iteration (e.g., in tests or admin tooling).
 ALL_COLLECTIONS: Final[tuple[str, ...]] = (
@@ -41,5 +40,4 @@ ALL_COLLECTIONS: Final[tuple[str, ...]] = (
     RECOMMENDATIONS,
     DECISION_HISTORY,
     PREFERENCE_PROFILES,
-    LIFECYCLE_DEFINITIONS,
 )

@@ -39,9 +39,8 @@ from app.models.user import User
 from app.models.workspace import Workspace
 
 # -- Models with nested value objects (depend on enums + base + stdlib) -----
-from app.models.knowledge_schema import KnowledgeSchema, SchemaField
+from app.models.knowledge_schema import KnowledgeSchema, SchemaField, LifecycleDefinition
 from app.models.knowledge_asset import KnowledgeAsset
-from app.models.lifecycle_definition import LifecycleDefinition, LifecycleStage
 from app.models.business_rule import BusinessRule, RuleCondition
 from app.models.recommendation import CandidateScore, Recommendation, RuleEvaluationResult
 from app.models.decision_history import DecisionHistory
@@ -71,9 +70,8 @@ __all__: list[str] = [
     "Workspace",
     "KnowledgeSchema",
     "SchemaField",
-    "KnowledgeAsset",
     "LifecycleDefinition",
-    "LifecycleStage",
+    "KnowledgeAsset",
     "BusinessRule",
     "RuleCondition",
     "CandidateScore",

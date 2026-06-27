@@ -45,7 +45,6 @@ async def create_all_indexes(db: AsyncIOMotorDatabase) -> None:  # type: ignore[
     await _create_recommendation_indexes(db)
     await _create_decision_history_indexes(db)
     await _create_preference_profile_indexes(db)
-    await _create_lifecycle_definition_indexes(db)
 
     logger.info("mongodb.indexes.all_created")
 
@@ -205,10 +204,3 @@ async def _create_preference_profile_indexes(db: AsyncIOMotorDatabase) -> None: 
     logger.debug("mongodb.indexes.created", collection=col.PREFERENCE_PROFILES)
 
 
-async def _create_lifecycle_definition_indexes(db: AsyncIOMotorDatabase) -> None:  # type: ignore[type-arg]
-    """Lifecycle Definitions: org_id."""
-    indexes = [
-        IndexModel([("organization_id", ASCENDING)], name="ld_org_id"),
-    ]
-    await db[col.LIFECYCLE_DEFINITIONS].create_indexes(indexes)
-    logger.debug("mongodb.indexes.created", collection=col.LIFECYCLE_DEFINITIONS)

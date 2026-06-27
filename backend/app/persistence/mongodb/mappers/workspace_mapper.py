@@ -22,11 +22,6 @@ def to_document(workspace: Workspace) -> WorkspaceDocument:
             if workspace.knowledge_schema_id is not None
             else None
         ),
-        lifecycle_definition_id=(
-            str(workspace.lifecycle_definition_id)
-            if workspace.lifecycle_definition_id is not None
-            else None
-        ),
         owner_id=str(workspace.owner_id),
         selected_knowledge_asset_ids=[
             str(aid) for aid in workspace.selected_knowledge_asset_ids
@@ -48,11 +43,6 @@ def to_domain(doc: WorkspaceDocument) -> Workspace:
         knowledge_schema_id=(
             UUID(doc["knowledge_schema_id"])
             if doc["knowledge_schema_id"] is not None
-            else None
-        ),
-        lifecycle_definition_id=(
-            UUID(doc["lifecycle_definition_id"])
-            if doc["lifecycle_definition_id"] is not None
             else None
         ),
         owner_id=UUID(doc["owner_id"]),

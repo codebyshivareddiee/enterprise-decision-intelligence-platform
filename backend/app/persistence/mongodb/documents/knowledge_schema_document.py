@@ -18,6 +18,16 @@ class SchemaFieldDocument(TypedDict):
     allowed_values: list[str] | None
 
 
+class LifecycleDefinitionDocument(TypedDict):
+    """Embedded sub-document for lifecycle configuration."""
+
+    initial_state: str
+    states: list[str]
+    allowed_transitions: dict[str, list[str]]
+    ai_generated: bool
+    user_modified: bool
+
+
 class KnowledgeSchemaDocument(TypedDict):
     """Raw BSON document stored in the ``knowledge_schemas`` collection."""
 
@@ -26,6 +36,7 @@ class KnowledgeSchemaDocument(TypedDict):
     name: str
     description: str | None
     fields: list[SchemaFieldDocument]
+    lifecycle: LifecycleDefinitionDocument | None
     version: int
     created_at: datetime
     updated_at: datetime

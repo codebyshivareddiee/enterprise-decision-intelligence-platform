@@ -61,6 +61,9 @@ class TextChunker(DocumentChunker):
                         "asset_type": asset.content_type.value,
                     }
                     
+                    if asset.lifecycle_state:
+                        metadata["lifecycle_state"] = asset.lifecycle_state
+                    
                     chunks.append(
                         DocumentChunk(
                             chunk_id=str(uuid.uuid4()),

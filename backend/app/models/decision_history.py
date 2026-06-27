@@ -35,8 +35,8 @@ class DecisionHistory(AuditedModel):
         decided_by: User ID of the human who made the decision.
         outcome: The decision outcome.
         lifecycle_stage: The lifecycle stage the asset moved to as a
-            result of this decision (matches a ``LifecycleStage.name``
-            from the workspace's LifecycleDefinition).
+            result of this decision (matches a stage from the workspace's
+            KnowledgeSchema's embedded lifecycle definition).
         notes: Optional free-text rationale provided by the decision
             maker. Valuable input for the Learner.
         ai_score_at_decision: The AI score the candidate had at the
@@ -77,7 +77,7 @@ class DecisionHistory(AuditedModel):
         max_length=100,
         description=(
             "Lifecycle stage the asset moved to as a result of this decision "
-            "(matches a LifecycleStage.name from the workspace's LifecycleDefinition)."
+            "(matches a state from the workspace's KnowledgeSchema's lifecycle definition)."
         ),
     )
     notes: str | None = Field(

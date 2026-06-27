@@ -17,7 +17,6 @@ from app.models.enums import UserRole, UserStatus, WorkspaceStatus, FieldType, A
 from app.models.knowledge_schema import KnowledgeSchema, SchemaField
 from app.models.workspace import Workspace
 from app.models.knowledge_asset import KnowledgeAsset
-from app.models.lifecycle_definition import LifecycleDefinition, LifecycleStage
 
 from app.knowledge.manager.knowledge_manager import KnowledgeManager
 from app.knowledge.manager.document_processor import DocumentProcessor
@@ -52,7 +51,6 @@ async def main():
         schema_coll = db["knowledge_schemas"]
         workspace_coll = db["workspaces"]
         asset_coll = db["knowledge_assets"]
-        lifecycle_coll = db["lifecycle_definitions"]
 
         # Reset demo data
         await org_coll.delete_many({"name": "XL Ventures Demo"})
@@ -116,6 +114,8 @@ async def main():
         await user_coll.insert_one(user.model_dump(mode="json"))
         print("[OK] Seeded user")
         
+        from app.models.knowledge_schema import LifecycleDefinition
+        
         schema = KnowledgeSchema(
             organization_id=org.id,
             name="Resume",
@@ -123,21 +123,15 @@ async def main():
             fields=[
                 SchemaField(name="name", label="Name", field_type=FieldType.STRING, required=True),
                 SchemaField(name="skills", label="Skills", field_type=FieldType.LIST, required=True)
-            ]
+            ],
+            lifecycle=LifecycleDefinition(
+                initial_state="Applied",
+                states=["Applied", "Interview"],
+                allowed_transitions={"Applied": ["Interview"]}
+            )
         )
         await schema_coll.insert_one(schema.model_dump(mode="json"))
         print("[OK] Seeded knowledge schema")
-        
-        lifecycle = LifecycleDefinition(
-            organization_id=org.id,
-            name="Resume Lifecycle",
-            description="Hiring pipeline",
-            stages=[
-                LifecycleStage(id=str(uuid4()), name="Applied", order=1),
-                LifecycleStage(id=str(uuid4()), name="Interview", order=2)
-            ]
-        )
-        await lifecycle_coll.insert_one(lifecycle.model_dump(mode="json"))
         
         asset = KnowledgeAsset(
             organization_id=org.id,
@@ -155,7 +149,6 @@ async def main():
             name="Hiring AI Engineer",
             description="Demo workspace for hiring",
             knowledge_schema_id=schema.id,
-            lifecycle_definition_id=lifecycle.id,
             status=WorkspaceStatus.ACTIVE,
             selected_knowledge_asset_ids=[asset.id],
             owner_id=user.id
@@ -166,14 +159,26 @@ async def main():
         await asset_coll.insert_one(asset.model_dump(mode="json"))
         print("[OK] Uploaded asset")
         
+        # Read lifecycle directly from KnowledgeSchema and use initial_state
+        initial_state = schema.lifecycle.initial_state if schema.lifecycle else None
+        asset.lifecycle_state = initial_state
+        
         # 7. Index Asset
-        print("Indexing asset through KnowledgeManager...")
+        print(f"Indexing asset through KnowledgeManager (Initial Lifecycle State: {initial_state})...")
         point_ids = await knowledge_manager.index_asset(asset)
         
         # Update asset in MongoDB to simulate what a real repository/workflow would do
         asset.status = AssetStatus.READY
         asset.qdrant_point_ids = point_ids
-        await asset_coll.update_one({"id": str(asset.id)}, {"$set": {"status": asset.status.value, "qdrant_point_ids": point_ids}})
+        
+        await asset_coll.update_one(
+            {"id": str(asset.id)}, 
+            {"$set": {
+                "status": asset.status.value, 
+                "qdrant_point_ids": point_ids,
+                "lifecycle_state": asset.lifecycle_state
+            }}
+        )
         print(f"[OK] Indexed {len(point_ids)} chunks into Qdrant")
         
         # 8. Retrieve
