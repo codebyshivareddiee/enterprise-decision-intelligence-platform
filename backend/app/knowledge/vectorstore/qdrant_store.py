@@ -1,6 +1,5 @@
-"""Qdrant vector store implementation."""
-
 import uuid
+import asyncio
 from typing import cast
 from qdrant_client import AsyncQdrantClient
 from qdrant_client.models import (
@@ -8,13 +7,15 @@ from qdrant_client.models import (
     Filter,
     FieldCondition,
     MatchValue,
+    MatchAny,
     VectorParams,
     Distance,
     SparseVectorParams,
     SparseVector,
+    SearchRequest,
     FilterSelector,
-    Prefetch,
-    FusionQuery,
+    NamedVector,
+    NamedSparseVector,
 )
 from app.knowledge.interfaces.vector_store import VectorStore
 from app.knowledge.models.chunk import PreparedChunk
@@ -124,53 +125,73 @@ class QdrantStore(VectorStore):
                 must_conditions.append(
                     FieldCondition(
                         key="asset_id",
-                        match=MatchValue(value=[str(aid) for aid in filters.selected_asset_ids]) # type: ignore
+                        match=MatchAny(any=[str(aid) for aid in filters.selected_asset_ids])
                     )
                 )
 
             filter_query = Filter(must=must_conditions) # type: ignore
             
-            # Use Qdrant's native hybrid search with prefetch and RRF fusion
-            results = await self.client.query_points(
+            dense_task = self.client.query_points(
                 collection_name=self.collection_name,
-                prefetch=[
-                    Prefetch(
-                        query=dense_vector,
-                        using=self.dense_vector_name,
-                        limit=top_k,
-                        filter=filter_query,
-                    ),
-                    Prefetch(
-                        query=SparseVector(indices=sparse_vector[0], values=sparse_vector[1]),
-                        using=self.sparse_vector_name,
-                        limit=top_k,
-                        filter=filter_query,
-                    )
-                ],
-                query=FusionQuery.RRF,
+                query=dense_vector,
+                using=self.dense_vector_name,
+                query_filter=filter_query,
                 limit=top_k,
                 with_payload=True,
             )
             
+            sparse_task = self.client.query_points(
+                collection_name=self.collection_name,
+                query=SparseVector(indices=sparse_vector[0], values=sparse_vector[1]),
+                using=self.sparse_vector_name,
+                query_filter=filter_query,
+                limit=top_k,
+                with_payload=True,
+            )
+            
+            dense_response, sparse_response = await asyncio.gather(dense_task, sparse_task)
+            batch_results = [dense_response.points, sparse_response.points]
+            
+            # Simple manual RRF implementation to combine dense and sparse results
+            combined_scores: dict[str, float] = {}
+            payload_map: dict[str, dict] = {} # type: ignore
+            
+            # Reciprocal Rank Fusion constant
+            k = 60
+            
+            for i, result_list in enumerate(batch_results):
+                for rank, hit in enumerate(result_list):
+                    point_id = str(hit.id)
+                    score = 1.0 / (k + rank + 1)
+                    
+                    if point_id in combined_scores:
+                        combined_scores[point_id] += score
+                    else:
+                        combined_scores[point_id] = score
+                        payload_map[point_id] = cast(dict, hit.payload) # type: ignore
+                        
+            # Sort by RRF score
+            sorted_results = sorted(combined_scores.items(), key=lambda x: x[1], reverse=True)[:top_k]
+            
             from app.knowledge.models.chunk import DocumentChunk
             
             final_results = []
-            for hit in results.points:
-                payload = cast(dict, hit.payload)
+            for point_id, score in sorted_results:
+                payload = payload_map[point_id]
                 asset_id = uuid.UUID(payload["asset_id"])
                 
                 # Reconstruct chunk
                 metadata = {k: v for k, v in payload.items() if k not in ["asset_id", "chunk_index", "content"]}
                 
                 chunk = DocumentChunk(
-                    chunk_id=str(hit.id),
+                    chunk_id=point_id,
                     asset_id=asset_id,
                     chunk_index=payload["chunk_index"],
                     content=payload["content"],
                     metadata=metadata
                 )
                 
-                final_results.append(SearchResult(chunk=chunk, score=hit.score))
+                final_results.append(SearchResult(chunk=chunk, score=score))
                 
             return final_results
         except Exception as e:

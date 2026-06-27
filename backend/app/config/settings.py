@@ -27,7 +27,7 @@ class Settings(BaseSettings):
     app_port: int = 8000
     app_debug: bool = True
     app_log_level: str = "INFO"
-    app_cors_origins: list[str] = ["http://localhost:3000"]
+    app_cors_origins: str | list[str] = ["http://localhost:3000"]
     secret_key: str = "change-me"
 
     # ── MongoDB Atlas ────────────────────────────────────────────────────────
