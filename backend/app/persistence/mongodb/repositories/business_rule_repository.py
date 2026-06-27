@@ -68,11 +68,12 @@ class BusinessRuleRepository:
             List of ``BusinessRule`` domain models ordered by ``priority`` ascending.
         """
         cursor = (
-            self._collection
-            .find({
-                "organization_id": str(organization_id),
-                "workspace_id": str(workspace_id),
-            })
+            self._collection.find(
+                {
+                    "organization_id": str(organization_id),
+                    "workspace_id": str(workspace_id),
+                }
+            )
             .sort("priority", 1)
             .skip(skip)
             .limit(limit)

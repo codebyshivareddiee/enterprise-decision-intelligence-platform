@@ -11,7 +11,6 @@ from app.persistence.mongodb.documents.business_rule_document import (
     RuleConditionDocument,
 )
 
-
 # ---------------------------------------------------------------------------
 # RuleCondition helpers
 # ---------------------------------------------------------------------------

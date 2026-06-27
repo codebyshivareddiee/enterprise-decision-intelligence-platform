@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any
 
 from typing_extensions import TypedDict
 
@@ -15,7 +14,7 @@ class OrganizationDocument(TypedDict):
     UUID string — Motor will serialise this as a BSON string, not ObjectId.
     """
 
-    _id: str                          # UUID v4 as string
+    _id: str  # UUID v4 as string
     name: str
     slug: str
     contact_email: str

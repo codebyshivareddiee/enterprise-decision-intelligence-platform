@@ -1,39 +1,39 @@
-import uuid
 import asyncio
+import uuid
 from typing import cast
+
 from qdrant_client import AsyncQdrantClient
 from qdrant_client.models import (
-    PointStruct,
-    Filter,
-    FieldCondition,
-    MatchValue,
-    MatchAny,
-    VectorParams,
     Distance,
-    SparseVectorParams,
-    SparseVector,
-    SearchRequest,
+    FieldCondition,
+    Filter,
     FilterSelector,
-    NamedVector,
-    NamedSparseVector,
+    MatchAny,
+    MatchValue,
+    PointStruct,
+    SparseVector,
+    SparseVectorParams,
+    VectorParams,
 )
+
+from app.knowledge.exceptions import VectorStoreError
 from app.knowledge.interfaces.vector_store import VectorStore
 from app.knowledge.models.chunk import PreparedChunk
 from app.knowledge.models.search import MetadataFilter, SearchResult
-from app.knowledge.exceptions import VectorStoreError
+
 
 class QdrantStore(VectorStore):
     """Vector store implementation using Qdrant."""
 
     def __init__(
-        self, 
-        client: AsyncQdrantClient, 
+        self,
+        client: AsyncQdrantClient,
         collection_name: str = "knowledge_vectors",
         dense_vector_name: str = "dense",
         sparse_vector_name: str = "sparse",
     ) -> None:
         """Initialize the Qdrant store.
-        
+
         Args:
             client: The async Qdrant client.
             collection_name: The name of the collection.
@@ -60,20 +60,22 @@ class QdrantStore(VectorStore):
                     },
                     sparse_vectors_config={
                         self.sparse_vector_name: SparseVectorParams()
-                    }
+                    },
                 )
         except Exception as e:
-            raise VectorStoreError(f"Failed to initialize Qdrant collection: {str(e)}") from e
+            raise VectorStoreError(
+                f"Failed to initialize Qdrant collection: {str(e)}"
+            ) from e
 
     async def upsert_chunks(self, chunks: list[PreparedChunk]) -> list[str]:
         """Upsert prepared chunks into the vector store."""
         if not chunks:
             return []
-            
+
         try:
             points = []
             point_ids = []
-            
+
             for prepared in chunks:
                 point_ids.append(prepared.chunk.chunk_id)
                 points.append(
@@ -91,46 +93,49 @@ class QdrantStore(VectorStore):
                             "chunk_index": prepared.chunk.chunk_index,
                             "content": prepared.chunk.content,
                             **prepared.chunk.metadata,
-                        }
+                        },
                     )
                 )
-                
+
             await self.client.upsert(
-                collection_name=self.collection_name,
-                points=points
+                collection_name=self.collection_name, points=points
             )
             return point_ids
         except Exception as e:
-            raise VectorStoreError(f"Failed to upsert chunks to Qdrant: {str(e)}") from e
+            raise VectorStoreError(
+                f"Failed to upsert chunks to Qdrant: {str(e)}"
+            ) from e
 
     async def search(
-        self, 
-        dense_vector: list[float], 
-        sparse_vector: tuple[list[int], list[float]], 
-        filters: MetadataFilter, 
-        top_k: int = 10
+        self,
+        dense_vector: list[float],
+        sparse_vector: tuple[list[int], list[float]],
+        filters: MetadataFilter,
+        top_k: int = 10,
     ) -> list[SearchResult]:
         """Perform a hybrid search in the vector store."""
         try:
             must_conditions = [
                 FieldCondition(
                     key="organization_id",
-                    match=MatchValue(value=str(filters.organization_id))
+                    match=MatchValue(value=str(filters.organization_id)),
                 )
             ]
-            
+
             if filters.selected_asset_ids:
-                # We do an OR over the selected assets, or an IN condition if supported, 
+                # We do an OR over the selected assets, or an IN condition if supported,
                 # but in qdrant MatchAny is essentially IN.
                 must_conditions.append(
                     FieldCondition(
                         key="asset_id",
-                        match=MatchAny(any=[str(aid) for aid in filters.selected_asset_ids])
+                        match=MatchAny(
+                            any=[str(aid) for aid in filters.selected_asset_ids]
+                        ),
                     )
                 )
 
-            filter_query = Filter(must=must_conditions) # type: ignore
-            
+            filter_query = Filter(must=must_conditions)  # type: ignore
+
             dense_task = self.client.query_points(
                 collection_name=self.collection_name,
                 query=dense_vector,
@@ -139,7 +144,7 @@ class QdrantStore(VectorStore):
                 limit=top_k,
                 with_payload=True,
             )
-            
+
             sparse_task = self.client.query_points(
                 collection_name=self.collection_name,
                 query=SparseVector(indices=sparse_vector[0], values=sparse_vector[1]),
@@ -148,51 +153,59 @@ class QdrantStore(VectorStore):
                 limit=top_k,
                 with_payload=True,
             )
-            
-            dense_response, sparse_response = await asyncio.gather(dense_task, sparse_task)
+
+            dense_response, sparse_response = await asyncio.gather(
+                dense_task, sparse_task
+            )
             batch_results = [dense_response.points, sparse_response.points]
-            
+
             # Simple manual RRF implementation to combine dense and sparse results
             combined_scores: dict[str, float] = {}
-            payload_map: dict[str, dict] = {} # type: ignore
-            
+            payload_map: dict[str, dict] = {}  # type: ignore
+
             # Reciprocal Rank Fusion constant
             k = 60
-            
+
             for i, result_list in enumerate(batch_results):
                 for rank, hit in enumerate(result_list):
                     point_id = str(hit.id)
                     score = 1.0 / (k + rank + 1)
-                    
+
                     if point_id in combined_scores:
                         combined_scores[point_id] += score
                     else:
                         combined_scores[point_id] = score
-                        payload_map[point_id] = cast(dict, hit.payload) # type: ignore
-                        
+                        payload_map[point_id] = cast(dict, hit.payload)  # type: ignore
+
             # Sort by RRF score
-            sorted_results = sorted(combined_scores.items(), key=lambda x: x[1], reverse=True)[:top_k]
-            
+            sorted_results = sorted(
+                combined_scores.items(), key=lambda x: x[1], reverse=True
+            )[:top_k]
+
             from app.knowledge.models.chunk import DocumentChunk
-            
+
             final_results = []
             for point_id, score in sorted_results:
                 payload = payload_map[point_id]
                 asset_id = uuid.UUID(payload["asset_id"])
-                
+
                 # Reconstruct chunk
-                metadata = {k: v for k, v in payload.items() if k not in ["asset_id", "chunk_index", "content"]}
-                
+                metadata = {
+                    k: v
+                    for k, v in payload.items()
+                    if k not in ["asset_id", "chunk_index", "content"]
+                }
+
                 chunk = DocumentChunk(
                     chunk_id=point_id,
                     asset_id=asset_id,
                     chunk_index=payload["chunk_index"],
                     content=payload["content"],
-                    metadata=metadata
+                    metadata=metadata,
                 )
-                
+
                 final_results.append(SearchResult(chunk=chunk, score=score))
-                
+
             return final_results
         except Exception as e:
             raise VectorStoreError(f"Failed to search Qdrant: {str(e)}") from e
@@ -206,12 +219,13 @@ class QdrantStore(VectorStore):
                     filter=Filter(
                         must=[
                             FieldCondition(
-                                key="asset_id",
-                                match=MatchValue(value=str(asset_id))
+                                key="asset_id", match=MatchValue(value=str(asset_id))
                             )
                         ]
                     )
-                )
+                ),
             )
         except Exception as e:
-            raise VectorStoreError(f"Failed to delete chunks for asset {asset_id}: {str(e)}") from e
+            raise VectorStoreError(
+                f"Failed to delete chunks for asset {asset_id}: {str(e)}"
+            ) from e

@@ -2,8 +2,10 @@
 
 from abc import ABC, abstractmethod
 from uuid import UUID
+
 from app.knowledge.models.chunk import PreparedChunk
 from app.knowledge.models.search import MetadataFilter, SearchResult
+
 
 class VectorStore(ABC):
     """Abstract base class for vector store integrations."""
@@ -24,7 +26,13 @@ class VectorStore(ABC):
         pass
 
     @abstractmethod
-    async def search(self, dense_vector: list[float], sparse_vector: tuple[list[int], list[float]], filters: MetadataFilter, top_k: int = 10) -> list[SearchResult]:
+    async def search(
+        self,
+        dense_vector: list[float],
+        sparse_vector: tuple[list[int], list[float]],
+        filters: MetadataFilter,
+        top_k: int = 10,
+    ) -> list[SearchResult]:
         """Perform a hybrid search in the vector store.
 
         Args:

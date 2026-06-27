@@ -5,6 +5,7 @@ from app.knowledge.interfaces.sparse import SparseGenerator
 from app.knowledge.interfaces.vector_store import VectorStore
 from app.knowledge.models.search import MetadataFilter, SearchResult
 
+
 class SearchService:
     """Coordinates embedding search queries and retrieving results from the vector store."""
 
@@ -15,7 +16,7 @@ class SearchService:
         vector_store: VectorStore,
     ) -> None:
         """Initialize the search service.
-        
+
         Args:
             dense_embedder: Embedder for generating dense query vectors.
             sparse_generator: Generator for generating sparse query vectors.
@@ -25,7 +26,9 @@ class SearchService:
         self.sparse_generator = sparse_generator
         self.vector_store = vector_store
 
-    async def search(self, query: str, filters: MetadataFilter, top_k: int = 10) -> list[SearchResult]:
+    async def search(
+        self, query: str, filters: MetadataFilter, top_k: int = 10
+    ) -> list[SearchResult]:
         """Perform a hybrid search for the given query.
 
         Args:
@@ -40,10 +43,10 @@ class SearchService:
         # Sequential for simplicity here, but can be gathered
         dense_vector = await self.dense_embedder.embed_query(query)
         sparse_vector = await self.sparse_generator.generate_sparse_query(query)
-        
+
         return await self.vector_store.search(
             dense_vector=dense_vector,
             sparse_vector=sparse_vector,
             filters=filters,
-            top_k=top_k
+            top_k=top_k,
         )

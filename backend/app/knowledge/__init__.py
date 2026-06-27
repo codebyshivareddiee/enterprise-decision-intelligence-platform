@@ -5,10 +5,10 @@ and retrieval, hiding the complexities of parsing, embedding, and vector
 database interactions behind the KnowledgeManager.
 """
 
-from .manager.knowledge_manager import KnowledgeManager
-from .models.search import SearchResult, MetadataFilter
-from .models.chunk import DocumentChunk
 from .exceptions.knowledge_exceptions import KnowledgeLayerError
+from .manager.knowledge_manager import KnowledgeManager
+from .models.chunk import DocumentChunk
+from .models.search import MetadataFilter, SearchResult
 
 __all__ = [
     "KnowledgeManager",

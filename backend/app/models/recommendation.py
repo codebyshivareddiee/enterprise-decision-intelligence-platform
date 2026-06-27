@@ -1,7 +1,7 @@
 """Recommendation domain model.
 
 A Recommendation is the output of a completed recommendation workflow
-run. It contains ranked candidates/options, scores, applied rule
+run. It contains ranked entities/options, scores, applied rule
 results, and a link to the human-readable explanation produced by the
 Explanation Agent (P10).
 """
@@ -15,16 +15,16 @@ from app.models.enums import RecommendationStatus
 
 
 class RuleEvaluationResult(BaseModel):
-    """Result of evaluating a single BusinessRule against a candidate.
+    """Result of evaluating a single BusinessRule against a entity.
 
     Attributes:
         rule_id: ID of the evaluated BusinessRule.
         rule_name: Name of the rule (denormalised for readability in
             reports without requiring a join).
-        passed: Whether the candidate satisfied the rule.
+        passed: Whether the entity satisfied the rule.
         is_hard_filter: True if this was a HARD_FILTER rule — a
             ``passed=False`` here unconditionally excluded the
-            candidate.
+            entity.
         reason: Optional human-readable explanation of the result.
     """
 
@@ -35,7 +35,7 @@ class RuleEvaluationResult(BaseModel):
         max_length=200,
         description="Rule name (denormalised for audit readability).",
     )
-    passed: bool = Field(..., description="True if the candidate satisfied the rule.")
+    passed: bool = Field(..., description="True if the entity satisfied the rule.")
     is_hard_filter: bool = Field(
         default=False,
         description="True if this rule was a HARD_FILTER type.",
@@ -46,23 +46,23 @@ class RuleEvaluationResult(BaseModel):
     )
 
 
-class CandidateScore(BaseModel):
-    """AI-generated score and reasoning for a single candidate/option.
+class EntityEvaluation(BaseModel):
+    """AI-generated score and reasoning for a single entity/option.
 
     Produced by the Reasoning Agent (P8) and consumed by the
     Recommendation Agent (P9) to produce a ranked list.
 
     Attributes:
-        asset_id: ID of the KnowledgeAsset representing this candidate.
-        asset_name: Denormalised candidate name for readability.
+        asset_id: ID of the KnowledgeAsset representing this entity.
+        asset_name: Denormalised entity name for readability.
         ai_score: Normalised AI score in [0.0, 1.0] produced by GPT-5
-            reasoning. Only set if the candidate passed all hard filters.
+            reasoning. Only set if the entity passed all hard filters.
         final_rank: Position in the final ranked list (1-indexed).
-            ``None`` if the candidate was excluded by hard rules.
+            ``None`` if the entity was excluded by hard rules.
         rule_results: Evaluation result for each BusinessRule applied.
         reasoning_notes: Free-text reasoning notes from the AI agent
             explaining why this score was assigned.
-        excluded: Whether this candidate was excluded before AI
+        excluded: Whether this entity was excluded before AI
             reasoning (i.e., failed at least one HARD_FILTER rule).
         exclusion_reason: Human-readable explanation if ``excluded`` is
             True.
@@ -70,13 +70,13 @@ class CandidateScore(BaseModel):
 
     asset_id: UUID = Field(
         ...,
-        description="ID of the KnowledgeAsset representing this candidate.",
+        description="ID of the KnowledgeAsset representing this entity.",
     )
     asset_name: str = Field(
         ...,
         min_length=1,
         max_length=500,
-        description="Candidate name (denormalised for readability).",
+        description="Entity name (denormalised for readability).",
     )
     ai_score: float | None = Field(
         default=None,
@@ -91,15 +91,15 @@ class CandidateScore(BaseModel):
     )
     rule_results: list[RuleEvaluationResult] = Field(
         default_factory=list,
-        description="Business rule evaluation results for this candidate.",
+        description="Business rule evaluation results for this entity.",
     )
     reasoning_notes: str | None = Field(
         default=None,
-        description="Free-text AI reasoning notes for this candidate's score.",
+        description="Free-text AI reasoning notes for this entity's score.",
     )
     excluded: bool = Field(
         default=False,
-        description="True if this candidate was excluded by a hard filter rule.",
+        description="True if this entity was excluded by a hard filter rule.",
     )
     exclusion_reason: str | None = Field(
         default=None,
@@ -110,7 +110,7 @@ class CandidateScore(BaseModel):
 class Recommendation(AuditedModel):
     """The output of a completed recommendation workflow run.
 
-    Contains the full ranked candidate list, run metadata, and a
+    Contains the full ranked entity list, run metadata, and a
     reference to the human-readable explanation document. Every
     recommendation must include an explanation — unexplained results
     must not be surfaced (see DO_NOT_CHANGE.md).
@@ -121,10 +121,10 @@ class Recommendation(AuditedModel):
         goal: The user-supplied natural-language goal that triggered
             this recommendation run.
         status: Current state of the recommendation workflow run.
-        candidates: Scored and ranked candidate list. Includes
-            excluded candidates with their exclusion reasons for
+        entities: Scored and ranked entity list. Includes
+            excluded entities with their exclusion reasons for
             auditability.
-        top_n: The number of top candidates surfaced to the user.
+        top_n: The number of top entities surfaced to the user.
         explanation: Human-readable explanation of the overall
             recommendation, generated by the Explanation Agent (P10).
             ``None`` until the explanation is generated; must be set
@@ -154,15 +154,15 @@ class Recommendation(AuditedModel):
         default=RecommendationStatus.PENDING,
         description="Current state of the recommendation workflow run.",
     )
-    candidates: list[CandidateScore] = Field(
+    entities: list[EntityEvaluation] = Field(
         default_factory=list,
-        description="Scored and ranked candidate list (includes excluded candidates).",
+        description="Scored and ranked entity list (includes excluded entities).",
     )
     top_n: int = Field(
         default=5,
         ge=1,
         le=100,
-        description="Number of top candidates to surface to the user.",
+        description="Number of top entities to surface to the user.",
     )
     explanation: str | None = Field(
         default=None,

@@ -9,7 +9,7 @@ Keep inheritance minimal — only add to this base what is genuinely
 shared by every top-level entity.
 """
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
 from pydantic import BaseModel, Field
@@ -17,7 +17,7 @@ from pydantic import BaseModel, Field
 
 def _utcnow() -> datetime:
     """Return the current UTC datetime (timezone-aware)."""
-    return datetime.now(tz=timezone.utc)
+    return datetime.now(tz=UTC)
 
 
 class AuditedModel(BaseModel):
@@ -31,7 +31,9 @@ class AuditedModel(BaseModel):
             are responsible for updating this field on every write.
     """
 
-    id: UUID = Field(default_factory=uuid4, description="Unique entity identifier (UUID v4).")
+    id: UUID = Field(
+        default_factory=uuid4, description="Unique entity identifier (UUID v4)."
+    )
     created_at: datetime = Field(
         default_factory=_utcnow,
         description="UTC timestamp of entity creation.",

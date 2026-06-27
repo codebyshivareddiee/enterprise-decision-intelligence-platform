@@ -16,18 +16,18 @@ from typing_extensions import TypedDict
 class KnowledgeAssetDocument(TypedDict):
     """Raw BSON document stored in the ``knowledge_assets`` collection."""
 
-    _id: str                        # UUID v4 as string
-    organization_id: str            # Primary tenant isolation key
+    _id: str  # UUID v4 as string
+    organization_id: str  # Primary tenant isolation key
     schema_id: str
     name: str
-    content_type: str               # AssetContentType enum value
-    status: str                     # AssetStatus enum value
+    content_type: str  # AssetContentType enum value
+    status: str  # AssetStatus enum value
     raw_content: str | None
     structured_data: dict[str, Any]
     file_path: str | None
     qdrant_point_ids: list[str]
     processing_error: str | None
-    uploaded_by: str                # User UUID as string
+    uploaded_by: str  # User UUID as string
     lifecycle_state: str | None
     created_at: datetime
     updated_at: datetime

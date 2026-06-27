@@ -14,6 +14,11 @@ instead of reaching into individual sub-modules.
 """
 
 # -- Enumerations (no dependencies) ----------------------------------------
+# -- Base model (depends only on stdlib) ------------------------------------
+from app.models.base import AuditedModel
+from app.models.business_rule import BusinessRule, RuleCondition
+from app.models.conversation import Conversation, ConversationMessage
+from app.models.decision_history import DecisionHistory
 from app.models.enums import (
     AssetContentType,
     AssetStatus,
@@ -29,23 +34,25 @@ from app.models.enums import (
     UserStatus,
     WorkspaceStatus,
 )
+from app.models.knowledge_asset import KnowledgeAsset
 
-# -- Base model (depends only on stdlib) ------------------------------------
-from app.models.base import AuditedModel
+# -- Models with nested value objects (depend on enums + base + stdlib) -----
+from app.models.knowledge_schema import (
+    KnowledgeSchema,
+    LifecycleDefinition,
+    SchemaField,
+)
 
 # -- Leaf domain models (depend on enums + base) ----------------------------
 from app.models.organization import Organization
+from app.models.preference_profile import PreferenceProfile, PreferenceSignal
+from app.models.recommendation import (
+    EntityEvaluation,
+    Recommendation,
+    RuleEvaluationResult,
+)
 from app.models.user import User
 from app.models.workspace import Workspace
-
-# -- Models with nested value objects (depend on enums + base + stdlib) -----
-from app.models.knowledge_schema import KnowledgeSchema, SchemaField, LifecycleDefinition
-from app.models.knowledge_asset import KnowledgeAsset
-from app.models.business_rule import BusinessRule, RuleCondition
-from app.models.recommendation import CandidateScore, Recommendation, RuleEvaluationResult
-from app.models.decision_history import DecisionHistory
-from app.models.preference_profile import PreferenceProfile, PreferenceSignal
-from app.models.conversation import Conversation, ConversationMessage
 
 __all__: list[str] = [
     # Enums
@@ -74,7 +81,7 @@ __all__: list[str] = [
     "KnowledgeAsset",
     "BusinessRule",
     "RuleCondition",
-    "CandidateScore",
+    "EntityEvaluation",
     "Recommendation",
     "RuleEvaluationResult",
     "DecisionHistory",

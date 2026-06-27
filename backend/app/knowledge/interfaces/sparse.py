@@ -2,11 +2,14 @@
 
 from abc import ABC, abstractmethod
 
+
 class SparseGenerator(ABC):
     """Abstract base class for sparse vector generators."""
 
     @abstractmethod
-    async def generate_sparse_chunks(self, chunks: list[str]) -> list[tuple[list[int], list[float]]]:
+    async def generate_sparse_chunks(
+        self, chunks: list[str]
+    ) -> list[tuple[list[int], list[float]]]:
         """Generate sparse vectors for a batch of text chunks.
 
         Args:

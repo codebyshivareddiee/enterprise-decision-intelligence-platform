@@ -1,7 +1,9 @@
 """Parser interface."""
 
 from abc import ABC, abstractmethod
+
 from app.models.knowledge_asset import KnowledgeAsset
+
 
 class DocumentParser(ABC):
     """Abstract base class for document parsers."""

@@ -1,8 +1,10 @@
 """Chunker interface."""
 
 from abc import ABC, abstractmethod
-from app.models.knowledge_asset import KnowledgeAsset
+
 from app.knowledge.models.chunk import DocumentChunk
+from app.models.knowledge_asset import KnowledgeAsset
+
 
 class DocumentChunker(ABC):
     """Abstract base class for document chunkers."""

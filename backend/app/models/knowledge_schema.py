@@ -109,7 +109,7 @@ class KnowledgeSchema(AuditedModel):
 
     Attributes:
         organization_id: Owning organization — enforces tenant isolation.
-        name: Human-readable schema name (e.g. ``"Candidate Profile"``).
+        name: Human-readable schema name (e.g. ``"Entity Profile"``).
         description: Optional description of the schema's purpose and
             the domain it covers.
         fields: Ordered list of field definitions. Field ``name`` values

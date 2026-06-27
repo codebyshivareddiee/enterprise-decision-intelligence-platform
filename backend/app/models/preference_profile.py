@@ -5,7 +5,7 @@ history within a workspace. They are workspace-scoped and never
 manually edited — the Learner agent is the only writer
 (see DO_NOT_CHANGE.md).
 
-Preference Profiles influence candidate ranking in future
+Preference Profiles influence entity ranking in future
 recommendation runs but do not modify business rules.
 """
 
@@ -27,7 +27,7 @@ class PreferenceSignal(BaseModel):
         rule_id: The business rule this signal relates to. Required
             when ``scope`` is ``RULE``.
         description: Human-readable description of the learned
-            preference (e.g. ``"Prefers candidates with 7+ years
+            preference (e.g. ``"Prefers entities with 7+ years
             experience"``).
         weight: Strength of this preference signal [0.0, 1.0]. Higher
             values give this signal more influence during ranking.

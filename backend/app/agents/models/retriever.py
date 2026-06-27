@@ -1,0 +1,23 @@
+"""Retriever Agent output schemas."""
+
+from typing import Any
+
+from pydantic import BaseModel, Field
+
+
+class RetrievedChunk(BaseModel):
+    """A single chunk retrieved from the Knowledge Layer."""
+
+    text: str = Field(description="The content of the chunk")
+    asset_id: str = Field(description="The ID of the source knowledge asset")
+    score: float = Field(description="The retrieval similarity score")
+    metadata: dict[str, Any] = Field(default_factory=dict, description="Chunk metadata")
+
+
+class RetrieverResult(BaseModel):
+    """The final output of the Retriever Agent."""
+
+    chunks: list[RetrievedChunk] = Field(
+        default_factory=list, description="List of relevant retrieved chunks"
+    )
+    query_used: str = Field(description="The exact query string used for retrieval")

@@ -6,7 +6,6 @@ circular imports. Keep this module free of business logic.
 
 from enum import Enum
 
-
 # ---------------------------------------------------------------------------
 # Organization & User
 # ---------------------------------------------------------------------------
@@ -86,7 +85,7 @@ class AssetContentType(str, Enum):
 
 
 class LifecycleStatus(str, Enum):
-    """Status a candidate / item occupies within a lifecycle stage."""
+    """Status a entity / item occupies within a lifecycle stage."""
 
     PENDING = "pending"
     IN_PROGRESS = "in_progress"
@@ -103,22 +102,22 @@ class LifecycleStatus(str, Enum):
 class RuleType(str, Enum):
     """Classification of a business rule by its evaluation strategy."""
 
-    HARD_FILTER = "hard_filter"        # Binary pass/fail — never overridable by AI
+    HARD_FILTER = "hard_filter"  # Binary pass/fail — never overridable by AI
     SOFT_PREFERENCE = "soft_preference"  # Influences scoring but does not exclude
     MANDATORY_FIELD = "mandatory_field"  # Field presence / non-null requirement
-    THRESHOLD = "threshold"             # Numeric comparison against a threshold
+    THRESHOLD = "threshold"  # Numeric comparison against a threshold
 
 
 class RuleOperator(str, Enum):
     """Comparison operators used in threshold and filter rules."""
 
-    EQ = "eq"          # Equal
-    NEQ = "neq"        # Not equal
-    GT = "gt"          # Greater than
-    GTE = "gte"        # Greater than or equal
-    LT = "lt"          # Less than
-    LTE = "lte"        # Less than or equal
-    IN = "in"          # Value in set
+    EQ = "eq"  # Equal
+    NEQ = "neq"  # Not equal
+    GT = "gt"  # Greater than
+    GTE = "gte"  # Greater than or equal
+    LT = "lt"  # Less than
+    LTE = "lte"  # Less than or equal
+    IN = "in"  # Value in set
     NOT_IN = "not_in"  # Value not in set
     EXISTS = "exists"  # Field is present and non-null
 
@@ -144,12 +143,12 @@ class RecommendationStatus(str, Enum):
 
 
 class DecisionOutcome(str, Enum):
-    """The human decision made on a recommended candidate / option."""
+    """The human decision made on a recommended entity / option."""
 
     APPROVED = "approved"
     REJECTED = "rejected"
-    OVERRIDDEN = "overridden"   # AI recommended against; human approved anyway
-    DEFERRED = "deferred"       # Decision postponed
+    OVERRIDDEN = "overridden"  # AI recommended against; human approved anyway
+    DEFERRED = "deferred"  # Decision postponed
 
 
 # ---------------------------------------------------------------------------
@@ -160,9 +159,11 @@ class DecisionOutcome(str, Enum):
 class LearningScope(str, Enum):
     """Scope at which a preference signal is applied."""
 
-    WORKSPACE = "workspace"      # Scoped to a single workspace (invariant from DO_NOT_CHANGE.md)
-    FIELD = "field"              # Preference tied to a specific schema field
-    RULE = "rule"                # Preference tied to a specific business rule
+    WORKSPACE = (
+        "workspace"  # Scoped to a single workspace (invariant from DO_NOT_CHANGE.md)
+    )
+    FIELD = "field"  # Preference tied to a specific schema field
+    RULE = "rule"  # Preference tied to a specific business rule
 
 
 # ---------------------------------------------------------------------------

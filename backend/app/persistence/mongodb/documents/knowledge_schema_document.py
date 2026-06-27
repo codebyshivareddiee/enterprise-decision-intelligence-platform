@@ -12,7 +12,7 @@ class SchemaFieldDocument(TypedDict):
 
     name: str
     label: str
-    field_type: str           # FieldType enum value
+    field_type: str  # FieldType enum value
     required: bool
     description: str | None
     allowed_values: list[str] | None
@@ -31,7 +31,7 @@ class LifecycleDefinitionDocument(TypedDict):
 class KnowledgeSchemaDocument(TypedDict):
     """Raw BSON document stored in the ``knowledge_schemas`` collection."""
 
-    _id: str                  # UUID v4 as string
+    _id: str  # UUID v4 as string
     organization_id: str
     name: str
     description: str | None

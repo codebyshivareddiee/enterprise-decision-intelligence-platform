@@ -61,7 +61,7 @@ async def _create_organization_indexes(db: AsyncIOMotorDatabase) -> None:  # typ
         IndexModel([("slug", ASCENDING)], name="org_slug", unique=True),
     ]
     await db[col.ORGANIZATIONS].create_indexes(indexes)
-    logger.debug("mongodb.indexes.created", collection=col.ORGANIZATIONS)
+    logger.debug("mongodb.indexes.created", extra={"collection": col.ORGANIZATIONS})
 
 
 async def _create_user_indexes(db: AsyncIOMotorDatabase) -> None:  # type: ignore[type-arg]
@@ -77,7 +77,7 @@ async def _create_user_indexes(db: AsyncIOMotorDatabase) -> None:  # type: ignor
         IndexModel([("status", ASCENDING)], name="user_status"),
     ]
     await db[col.USERS].create_indexes(indexes)
-    logger.debug("mongodb.indexes.created", collection=col.USERS)
+    logger.debug("mongodb.indexes.created", extra={"collection": col.USERS})
 
 
 async def _create_knowledge_schema_indexes(db: AsyncIOMotorDatabase) -> None:  # type: ignore[type-arg]
@@ -86,7 +86,7 @@ async def _create_knowledge_schema_indexes(db: AsyncIOMotorDatabase) -> None:  #
         IndexModel([("organization_id", ASCENDING)], name="schema_org_id"),
     ]
     await db[col.KNOWLEDGE_SCHEMAS].create_indexes(indexes)
-    logger.debug("mongodb.indexes.created", collection=col.KNOWLEDGE_SCHEMAS)
+    logger.debug("mongodb.indexes.created", extra={"collection": col.KNOWLEDGE_SCHEMAS})
 
 
 async def _create_knowledge_asset_indexes(db: AsyncIOMotorDatabase) -> None:  # type: ignore[type-arg]
@@ -104,7 +104,7 @@ async def _create_knowledge_asset_indexes(db: AsyncIOMotorDatabase) -> None:  # 
         IndexModel([("status", ASCENDING)], name="asset_status"),
     ]
     await db[col.KNOWLEDGE_ASSETS].create_indexes(indexes)
-    logger.debug("mongodb.indexes.created", collection=col.KNOWLEDGE_ASSETS)
+    logger.debug("mongodb.indexes.created", extra={"collection": col.KNOWLEDGE_ASSETS})
 
 
 async def _create_workspace_indexes(db: AsyncIOMotorDatabase) -> None:  # type: ignore[type-arg]
@@ -117,7 +117,7 @@ async def _create_workspace_indexes(db: AsyncIOMotorDatabase) -> None:  # type: 
         ),
     ]
     await db[col.WORKSPACES].create_indexes(indexes)
-    logger.debug("mongodb.indexes.created", collection=col.WORKSPACES)
+    logger.debug("mongodb.indexes.created", extra={"collection": col.WORKSPACES})
 
 
 async def _create_rule_indexes(db: AsyncIOMotorDatabase) -> None:  # type: ignore[type-arg]
@@ -136,7 +136,7 @@ async def _create_rule_indexes(db: AsyncIOMotorDatabase) -> None:  # type: ignor
         ),
     ]
     await db[col.RULES].create_indexes(indexes)
-    logger.debug("mongodb.indexes.created", collection=col.RULES)
+    logger.debug("mongodb.indexes.created", extra={"collection": col.RULES})
 
 
 async def _create_conversation_indexes(db: AsyncIOMotorDatabase) -> None:  # type: ignore[type-arg]
@@ -150,7 +150,7 @@ async def _create_conversation_indexes(db: AsyncIOMotorDatabase) -> None:  # typ
         IndexModel([("is_active", ASCENDING)], name="conv_is_active"),
     ]
     await db[col.CONVERSATIONS].create_indexes(indexes)
-    logger.debug("mongodb.indexes.created", collection=col.CONVERSATIONS)
+    logger.debug("mongodb.indexes.created", extra={"collection": col.CONVERSATIONS})
 
 
 async def _create_recommendation_indexes(db: AsyncIOMotorDatabase) -> None:  # type: ignore[type-arg]
@@ -164,7 +164,7 @@ async def _create_recommendation_indexes(db: AsyncIOMotorDatabase) -> None:  # t
         IndexModel([("triggered_by", ASCENDING)], name="rec_triggered_by"),
     ]
     await db[col.RECOMMENDATIONS].create_indexes(indexes)
-    logger.debug("mongodb.indexes.created", collection=col.RECOMMENDATIONS)
+    logger.debug("mongodb.indexes.created", extra={"collection": col.RECOMMENDATIONS})
 
 
 async def _create_decision_history_indexes(db: AsyncIOMotorDatabase) -> None:  # type: ignore[type-arg]
@@ -185,7 +185,7 @@ async def _create_decision_history_indexes(db: AsyncIOMotorDatabase) -> None:  #
         IndexModel([("decided_by", ASCENDING)], name="dh_decided_by"),
     ]
     await db[col.DECISION_HISTORY].create_indexes(indexes)
-    logger.debug("mongodb.indexes.created", collection=col.DECISION_HISTORY)
+    logger.debug("mongodb.indexes.created", extra={"collection": col.DECISION_HISTORY})
 
 
 async def _create_preference_profile_indexes(db: AsyncIOMotorDatabase) -> None:  # type: ignore[type-arg]
@@ -201,6 +201,4 @@ async def _create_preference_profile_indexes(db: AsyncIOMotorDatabase) -> None: 
         IndexModel([("organization_id", ASCENDING)], name="pp_org_id"),
     ]
     await db[col.PREFERENCE_PROFILES].create_indexes(indexes)
-    logger.debug("mongodb.indexes.created", collection=col.PREFERENCE_PROFILES)
-
-
+    logger.debug("mongodb.indexes.created", extra={"collection": col.PREFERENCE_PROFILES})

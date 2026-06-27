@@ -22,9 +22,9 @@ The Orchestrator will use this contract to validate state and route data between
 
 # Available Agents
 - RETRIEVER: Fetches relevant knowledge chunks from Qdrant based on semantic search.
-- RULE_CHECKER: Applies deterministic business rules to filter out invalid candidates.
-- REASONING: Applies probabilistic LLM reasoning to evaluate and score candidates.
-- RECOMMENDATION: Ranks scored candidates to produce final recommendations.
+- RULE_CHECKER: Applies deterministic business rules to filter out invalid entities.
+- REASONING: Applies probabilistic LLM reasoning to evaluate and score entities.
+- RECOMMENDATION: Ranks scored entities to produce final recommendations.
 - EXPLANATION: Generates human-readable rationales for recommendations.
 - LEARNER: Asynchronously updates workspace preference profiles based on human decisions.
 
@@ -50,6 +50,6 @@ CRITICAL INSTRUCTIONS:
 4. Do NOT hardcode the same sequence for every request. If the user request is simple, the plan should be short. If knowledge is missing, plan to fetch it first. If rules exist, include the RULE_CHECKER.
 5. If a decision has high stakes (e.g. hiring, financial), ensure `requires_human_review` is true.
 6. Define `success_criteria` for every step.
-7. Populate `replanning_conditions` with situations where the Orchestrator should stop execution and ask you for a new plan (e.g., "All candidates failed business rules", "Confidence score below 0.7").
+7. Populate `replanning_conditions` with situations where the Orchestrator should stop execution and ask you for a new plan (e.g., "All entities failed business rules", "Confidence score below 0.7").
 
 You must return ONLY the structured JSON that conforms to the requested Pydantic ExecutionPlan schema.

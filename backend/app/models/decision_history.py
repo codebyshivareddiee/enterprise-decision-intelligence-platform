@@ -29,8 +29,8 @@ class DecisionHistory(AuditedModel):
         organization_id: Owning organization — tenant isolation.
         workspace_id: Workspace in which the decision was made.
         recommendation_id: ID of the Recommendation that contained
-            the candidate this decision applies to.
-        asset_id: ID of the KnowledgeAsset (candidate/option) the
+            the entity this decision applies to.
+        asset_id: ID of the KnowledgeAsset (entity/option) the
             decision was made about.
         decided_by: User ID of the human who made the decision.
         outcome: The decision outcome.
@@ -39,11 +39,11 @@ class DecisionHistory(AuditedModel):
             KnowledgeSchema's embedded lifecycle definition).
         notes: Optional free-text rationale provided by the decision
             maker. Valuable input for the Learner.
-        ai_score_at_decision: The AI score the candidate had at the
+        ai_score_at_decision: The AI score the entity had at the
             time of the decision. Stored for learning context — if the
-            human overrides a low-scoring candidate, this delta
+            human overrides a low-scoring entity, this delta
             carries signal.
-        ai_rank_at_decision: The AI rank the candidate held at the
+        ai_rank_at_decision: The AI rank the entity held at the
             time of the decision. Same learning-context rationale.
     """
 
@@ -57,7 +57,7 @@ class DecisionHistory(AuditedModel):
     )
     recommendation_id: UUID = Field(
         ...,
-        description="ID of the Recommendation containing this candidate.",
+        description="ID of the Recommendation containing this entity.",
     )
     asset_id: UUID = Field(
         ...,
@@ -89,10 +89,10 @@ class DecisionHistory(AuditedModel):
         default=None,
         ge=0.0,
         le=1.0,
-        description="AI score assigned to this candidate at time of decision.",
+        description="AI score assigned to this entity at time of decision.",
     )
     ai_rank_at_decision: int | None = Field(
         default=None,
         ge=1,
-        description="AI rank of this candidate at time of decision.",
+        description="AI rank of this entity at time of decision.",
     )

@@ -1,7 +1,7 @@
 """BusinessRule domain model.
 
 Business rules are deterministic filter conditions evaluated before AI
-reasoning. Hard-failing rules always exclude candidates — GPT-5 can
+reasoning. Hard-failing rules always exclude entities — GPT-5 can
 never override them (see DO_NOT_CHANGE.md).
 
 Rules are stored as structured configuration, never as executable code.
@@ -56,7 +56,7 @@ class BusinessRule(AuditedModel):
     """A deterministic evaluation rule applied before AI reasoning.
 
     Business rules are never delegated to AI. A ``HARD_FILTER`` rule
-    that fails unconditionally excludes the candidate — GPT-5 cannot
+    that fails unconditionally excludes the entity — GPT-5 cannot
     override it (architectural invariant from DO_NOT_CHANGE.md).
 
     Attributes:

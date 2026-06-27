@@ -11,17 +11,17 @@ from typing_extensions import TypedDict
 class RuleEvaluationResultDocument(TypedDict):
     """Embedded sub-document for a single rule evaluation result."""
 
-    rule_id: str      # UUID as string
+    rule_id: str  # UUID as string
     rule_name: str
     passed: bool
     is_hard_filter: bool
     reason: str | None
 
 
-class CandidateScoreDocument(TypedDict):
-    """Embedded sub-document for a single candidate score entry."""
+class EntityEvaluationDocument(TypedDict):
+    """Embedded sub-document for a single entity score entry."""
 
-    asset_id: str     # UUID as string
+    asset_id: str  # UUID as string
     asset_name: str
     ai_score: float | None
     final_rank: int | None
@@ -34,15 +34,15 @@ class CandidateScoreDocument(TypedDict):
 class RecommendationDocument(TypedDict):
     """Raw BSON document stored in the ``recommendations`` collection."""
 
-    _id: str                         # UUID v4 as string
+    _id: str  # UUID v4 as string
     organization_id: str
     workspace_id: str
     goal: str
-    status: str                      # RecommendationStatus enum value
-    candidates: list[CandidateScoreDocument]
+    status: str  # RecommendationStatus enum value
+    entities: list[EntityEvaluationDocument]
     top_n: int
     explanation: str | None
-    triggered_by: str                # User UUID as string
+    triggered_by: str  # User UUID as string
     plan_snapshot: list[dict[str, Any]]
     error_message: str | None
     created_at: datetime

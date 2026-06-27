@@ -1,12 +1,12 @@
 """Knowledge exceptions module."""
 
 from .knowledge_exceptions import (
-    KnowledgeLayerError,
-    UnsupportedFormatError,
-    ParsingError,
     ChunkingError,
     EmbeddingError,
+    KnowledgeLayerError,
+    ParsingError,
     SparseGenerationError,
+    UnsupportedFormatError,
     VectorStoreError,
 )
 

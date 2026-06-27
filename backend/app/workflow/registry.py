@@ -1,6 +1,7 @@
 """Agent registry for the workflow runtime."""
 
-from typing import Callable
+from collections.abc import Callable
+
 from pydantic import BaseModel, Field
 
 from app.agents.planner.schemas import AgentType, WorkflowArtifact
@@ -9,25 +10,26 @@ from app.workflow.exceptions import AgentNotRegisteredError
 
 class NodeDefinition(BaseModel):
     """Metadata for a registered agent node in the workflow."""
+
     agent_type: AgentType = Field(description="The type of agent")
-    node_implementation: Callable = Field(description="The actual callable node function")
+    node_implementation: Callable = Field(
+        description="The actual callable node function"
+    )
     consumes: list[WorkflowArtifact] = Field(
-        default_factory=list,
-        description="Artifacts required by this node"
+        default_factory=list, description="Artifacts required by this node"
     )
     produces: list[WorkflowArtifact] = Field(
-        default_factory=list,
-        description="Artifacts produced by this node"
+        default_factory=list, description="Artifacts produced by this node"
     )
     description: str = Field(description="Description of the node's capabilities")
-    
+
     class Config:
         arbitrary_types_allowed = True
 
 
 class AgentRegistry:
     """Registry mapping AgentTypes to their node implementations."""
-    
+
     def __init__(self) -> None:
         self._registry: dict[AgentType, NodeDefinition] = {}
 
@@ -37,7 +39,7 @@ class AgentRegistry:
         node_implementation: Callable,
         consumes: list[WorkflowArtifact],
         produces: list[WorkflowArtifact],
-        description: str
+        description: str,
     ) -> None:
         """Register an agent node in the registry."""
         self._registry[agent_type] = NodeDefinition(
@@ -45,17 +47,19 @@ class AgentRegistry:
             node_implementation=node_implementation,
             consumes=consumes,
             produces=produces,
-            description=description
+            description=description,
         )
 
     def get(self, agent_type: AgentType) -> NodeDefinition:
         """Get the node definition for an agent type.
-        
+
         Raises:
             AgentNotRegisteredError: If the agent type is not registered.
         """
         if agent_type not in self._registry:
-            raise AgentNotRegisteredError(f"Agent '{agent_type.value}' is not registered.")
+            raise AgentNotRegisteredError(
+                f"Agent '{agent_type.value}' is not registered."
+            )
         return self._registry[agent_type]
 
     def is_registered(self, agent_type: AgentType) -> bool:

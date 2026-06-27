@@ -79,8 +79,7 @@ class DecisionHistoryRepository:
             List of ``DecisionHistory`` domain models ordered by ``created_at`` ascending.
         """
         cursor = (
-            self._collection
-            .find({"workspace_id": str(workspace_id)})
+            self._collection.find({"workspace_id": str(workspace_id)})
             .sort("created_at", 1)
             .skip(skip)
             .limit(limit)

@@ -6,9 +6,9 @@ from typing import Any
 
 import jinja2
 
-from app.ai.manager import AIManager
-from app.agents.planner.schemas import ExecutionPlan
 from app.agents.planner.exceptions import PlanGenerationError
+from app.agents.planner.schemas import ExecutionPlan
+from app.ai.manager import AIManager
 
 
 class Planner:
@@ -28,7 +28,7 @@ class Planner:
         prompt_path = Path(__file__).parent / "prompts" / "planner_prompt.jinja2"
         if not prompt_path.exists():
             raise FileNotFoundError(f"Planner prompt not found at {prompt_path}")
-        
+
         env = jinja2.Environment(loader=jinja2.FileSystemLoader(prompt_path.parent))
         return env.get_template("planner_prompt.jinja2")
 
@@ -61,7 +61,7 @@ class Planner:
 
         Returns:
             ExecutionPlan: A structured DAG for the Orchestrator.
-            
+
         Raises:
             PlanGenerationError: If the AI fails to generate a valid plan.
         """
@@ -69,13 +69,21 @@ class Planner:
         prompt_content = self._prompt_template.render(
             organization=json.dumps(organization) if organization else "None",
             workspace=json.dumps(workspace) if workspace else "None",
-            knowledge_assets=json.dumps(knowledge_assets) if knowledge_assets else "None",
-            knowledge_schema=json.dumps(knowledge_schema) if knowledge_schema else "None",
+            knowledge_assets=(
+                json.dumps(knowledge_assets) if knowledge_assets else "None"
+            ),
+            knowledge_schema=(
+                json.dumps(knowledge_schema) if knowledge_schema else "None"
+            ),
             business_rules=json.dumps(business_rules) if business_rules else "None",
-            workspace_preferences=json.dumps(workspace_preferences) if workspace_preferences else "None",
+            workspace_preferences=(
+                json.dumps(workspace_preferences) if workspace_preferences else "None"
+            ),
             lifecycle=json.dumps(lifecycle) if lifecycle else "None",
             enabled_agents=json.dumps(enabled_agents) if enabled_agents else "None",
-            execution_history=json.dumps(execution_history) if execution_history else "None",
+            execution_history=(
+                json.dumps(execution_history) if execution_history else "None"
+            ),
         )
 
         try:
@@ -84,13 +92,17 @@ class Planner:
                 prompt=f"User Request: {user_request}\n\nContext Context:\n{prompt_content}",
                 response_schema=ExecutionPlan,
                 system_prompt="You are a Principal AI Architect generating dynamic ExecutionPlans.",
-                temperature=0.2, # Low temp for structured logic
+                temperature=0.2,  # Low temp for structured logic
             )
-            
+
             if not isinstance(plan, ExecutionPlan):
-                raise PlanGenerationError("AIManager returned an invalid type, expected ExecutionPlan.")
-                
+                raise PlanGenerationError(
+                    "AIManager returned an invalid type, expected ExecutionPlan."
+                )
+
             return plan
 
         except Exception as e:
-            raise PlanGenerationError(f"Failed to generate execution plan: {str(e)}") from e
+            raise PlanGenerationError(
+                f"Failed to generate execution plan: {str(e)}"
+            ) from e

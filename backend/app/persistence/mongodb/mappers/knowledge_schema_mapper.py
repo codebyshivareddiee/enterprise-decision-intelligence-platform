@@ -5,13 +5,16 @@ from __future__ import annotations
 from uuid import UUID
 
 from app.models.enums import FieldType
-from app.models.knowledge_schema import KnowledgeSchema, SchemaField, LifecycleDefinition
+from app.models.knowledge_schema import (
+    KnowledgeSchema,
+    LifecycleDefinition,
+    SchemaField,
+)
 from app.persistence.mongodb.documents.knowledge_schema_document import (
     KnowledgeSchemaDocument,
-    SchemaFieldDocument,
     LifecycleDefinitionDocument,
+    SchemaFieldDocument,
 )
-
 
 # ---------------------------------------------------------------------------
 # SchemaField helpers
@@ -45,7 +48,9 @@ def _field_to_domain(doc: SchemaFieldDocument) -> SchemaField:
 # ---------------------------------------------------------------------------
 
 
-def _lifecycle_to_document(lifecycle: LifecycleDefinition) -> LifecycleDefinitionDocument:
+def _lifecycle_to_document(
+    lifecycle: LifecycleDefinition,
+) -> LifecycleDefinitionDocument:
     return LifecycleDefinitionDocument(
         initial_state=lifecycle.initial_state,
         states=lifecycle.states,
@@ -78,7 +83,9 @@ def to_document(schema: KnowledgeSchema) -> KnowledgeSchemaDocument:
         name=schema.name,
         description=schema.description,
         fields=[_field_to_document(f) for f in schema.fields],
-        lifecycle=_lifecycle_to_document(schema.lifecycle) if schema.lifecycle else None,
+        lifecycle=(
+            _lifecycle_to_document(schema.lifecycle) if schema.lifecycle else None
+        ),
         version=schema.version,
         created_at=schema.created_at,
         updated_at=schema.updated_at,
@@ -87,13 +94,14 @@ def to_document(schema: KnowledgeSchema) -> KnowledgeSchemaDocument:
 
 def to_domain(doc: KnowledgeSchemaDocument) -> KnowledgeSchema:
     """Convert a raw Mongo document to a ``KnowledgeSchema`` domain model."""
+    lc_doc = doc.get("lifecycle")
     return KnowledgeSchema(
         id=UUID(doc["_id"]),
         organization_id=UUID(doc["organization_id"]),
         name=doc["name"],
         description=doc["description"],
         fields=[_field_to_domain(f) for f in doc["fields"]],
-        lifecycle=_lifecycle_to_domain(doc["lifecycle"]) if doc.get("lifecycle") else None,
+        lifecycle=_lifecycle_to_domain(lc_doc) if lc_doc is not None else None,
         version=doc["version"],
         created_at=doc["created_at"],
         updated_at=doc["updated_at"],

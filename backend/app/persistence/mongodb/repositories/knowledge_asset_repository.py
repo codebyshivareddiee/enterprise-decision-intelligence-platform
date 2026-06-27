@@ -130,8 +130,7 @@ class KnowledgeAssetRepository:
             List of ``KnowledgeAsset`` domain models.
         """
         cursor = (
-            self._collection
-            .find({"organization_id": str(organization_id)})
+            self._collection.find({"organization_id": str(organization_id)})
             .skip(skip)
             .limit(limit)
         )
@@ -166,4 +165,3 @@ class KnowledgeAssetRepository:
         """
         result = await self._collection.delete_one({"_id": str(asset_id)})
         return result.deleted_count > 0
-

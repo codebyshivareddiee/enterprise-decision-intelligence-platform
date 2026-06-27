@@ -11,7 +11,6 @@ from app.persistence.mongodb.documents.preference_profile_document import (
     PreferenceSignalDocument,
 )
 
-
 # ---------------------------------------------------------------------------
 # PreferenceSignal helpers
 # ---------------------------------------------------------------------------

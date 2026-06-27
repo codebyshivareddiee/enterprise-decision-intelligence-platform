@@ -55,4 +55,3 @@ def to_domain(doc: KnowledgeAssetDocument) -> KnowledgeAsset:
         created_at=doc["created_at"],
         updated_at=doc["updated_at"],
     )
-

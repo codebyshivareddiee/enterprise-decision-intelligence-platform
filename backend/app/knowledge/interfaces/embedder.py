@@ -2,6 +2,7 @@
 
 from abc import ABC, abstractmethod
 
+
 class DenseEmbedder(ABC):
     """Abstract base class for dense embedding generators."""
 

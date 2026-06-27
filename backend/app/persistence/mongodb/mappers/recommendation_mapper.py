@@ -6,23 +6,24 @@ from uuid import UUID
 
 from app.models.enums import RecommendationStatus
 from app.models.recommendation import (
-    CandidateScore,
+    EntityEvaluation,
     Recommendation,
     RuleEvaluationResult,
 )
 from app.persistence.mongodb.documents.recommendation_document import (
-    CandidateScoreDocument,
+    EntityEvaluationDocument,
     RecommendationDocument,
     RuleEvaluationResultDocument,
 )
-
 
 # ---------------------------------------------------------------------------
 # RuleEvaluationResult helpers
 # ---------------------------------------------------------------------------
 
 
-def _rule_result_to_document(result: RuleEvaluationResult) -> RuleEvaluationResultDocument:
+def _rule_result_to_document(
+    result: RuleEvaluationResult,
+) -> RuleEvaluationResultDocument:
     return RuleEvaluationResultDocument(
         rule_id=str(result.rule_id),
         rule_name=result.rule_name,
@@ -43,25 +44,25 @@ def _rule_result_to_domain(doc: RuleEvaluationResultDocument) -> RuleEvaluationR
 
 
 # ---------------------------------------------------------------------------
-# CandidateScore helpers
+# EntityEvaluation helpers
 # ---------------------------------------------------------------------------
 
 
-def _candidate_to_document(candidate: CandidateScore) -> CandidateScoreDocument:
-    return CandidateScoreDocument(
-        asset_id=str(candidate.asset_id),
-        asset_name=candidate.asset_name,
-        ai_score=candidate.ai_score,
-        final_rank=candidate.final_rank,
-        rule_results=[_rule_result_to_document(r) for r in candidate.rule_results],
-        reasoning_notes=candidate.reasoning_notes,
-        excluded=candidate.excluded,
-        exclusion_reason=candidate.exclusion_reason,
+def _entity_to_document(entity: EntityEvaluation) -> EntityEvaluationDocument:
+    return EntityEvaluationDocument(
+        asset_id=str(entity.asset_id),
+        asset_name=entity.asset_name,
+        ai_score=entity.ai_score,
+        final_rank=entity.final_rank,
+        rule_results=[_rule_result_to_document(r) for r in entity.rule_results],
+        reasoning_notes=entity.reasoning_notes,
+        excluded=entity.excluded,
+        exclusion_reason=entity.exclusion_reason,
     )
 
 
-def _candidate_to_domain(doc: CandidateScoreDocument) -> CandidateScore:
-    return CandidateScore(
+def _entity_to_domain(doc: EntityEvaluationDocument) -> EntityEvaluation:
+    return EntityEvaluation(
         asset_id=UUID(doc["asset_id"]),
         asset_name=doc["asset_name"],
         ai_score=doc["ai_score"],
@@ -86,7 +87,7 @@ def to_document(recommendation: Recommendation) -> RecommendationDocument:
         workspace_id=str(recommendation.workspace_id),
         goal=recommendation.goal,
         status=recommendation.status.value,
-        candidates=[_candidate_to_document(c) for c in recommendation.candidates],
+        entities=[_entity_to_document(c) for c in recommendation.entities],
         top_n=recommendation.top_n,
         explanation=recommendation.explanation,
         triggered_by=str(recommendation.triggered_by),
@@ -105,7 +106,7 @@ def to_domain(doc: RecommendationDocument) -> Recommendation:
         workspace_id=UUID(doc["workspace_id"]),
         goal=doc["goal"],
         status=RecommendationStatus(doc["status"]),
-        candidates=[_candidate_to_domain(c) for c in doc["candidates"]],
+        entities=[_entity_to_domain(c) for c in doc["entities"]],
         top_n=doc["top_n"],
         explanation=doc["explanation"],
         triggered_by=UUID(doc["triggered_by"]),

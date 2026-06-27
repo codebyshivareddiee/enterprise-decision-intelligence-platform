@@ -87,8 +87,7 @@ class PreferenceProfileRepository:
             List of ``PreferenceProfile`` domain models.
         """
         cursor = (
-            self._collection
-            .find({"organization_id": str(organization_id)})
+            self._collection.find({"organization_id": str(organization_id)})
             .skip(skip)
             .limit(limit)
         )

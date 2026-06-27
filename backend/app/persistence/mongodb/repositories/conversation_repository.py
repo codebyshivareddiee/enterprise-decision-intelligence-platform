@@ -68,11 +68,12 @@ class ConversationRepository:
             List of ``Conversation`` domain models ordered by ``created_at`` descending.
         """
         cursor = (
-            self._collection
-            .find({
-                "organization_id": str(organization_id),
-                "workspace_id": str(workspace_id),
-            })
+            self._collection.find(
+                {
+                    "organization_id": str(organization_id),
+                    "workspace_id": str(workspace_id),
+                }
+            )
             .sort("created_at", -1)
             .skip(skip)
             .limit(limit)

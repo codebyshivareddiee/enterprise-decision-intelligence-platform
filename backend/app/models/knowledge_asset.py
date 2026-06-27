@@ -106,4 +106,3 @@ class KnowledgeAsset(AuditedModel):
         default=None,
         description="The current lifecycle state of this asset, derived from the schema's initial state upon ingestion.",
     )
-

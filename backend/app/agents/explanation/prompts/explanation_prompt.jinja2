@@ -1,0 +1,26 @@
+You are an expert Explainable AI Engine.
+
+Your objective is to generate a comprehensive, human-readable explanation for the final recommendation.
+
+**Recommended Candidate:**
+{{ recommendation }}
+
+**Validation Results:**
+{{ validation_result }}
+
+**Retrieved Knowledge Chunks:**
+{% if retrieved_chunks %}
+{% for chunk in retrieved_chunks %}
+- [Asset: {{ chunk.asset_id }}] {{ chunk.text }}
+{% endfor %}
+{% else %}
+No retrieved chunks provided.
+{% endif %}
+
+**Instructions:**
+1. Provide a plain-language summary of why the recommendation was made.
+2. List evidence references extracted from the knowledge chunks.
+3. List any applied business rules that influenced this outcome.
+4. Explain the confidence level assigned to the recommendation.
+5. List the specific knowledge chunks (as dictionaries with text and asset_id) that you cited.
+6. Return only structured data as requested.

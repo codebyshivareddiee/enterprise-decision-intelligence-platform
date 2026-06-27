@@ -11,7 +11,6 @@ from app.persistence.mongodb.documents.conversation_document import (
     ConversationMessageDocument,
 )
 
-
 # ---------------------------------------------------------------------------
 # ConversationMessage helpers
 # ---------------------------------------------------------------------------
@@ -23,9 +22,7 @@ def _message_to_document(msg: ConversationMessage) -> ConversationMessageDocumen
         content=msg.content,
         timestamp=msg.timestamp,
         recommendation_id=(
-            str(msg.recommendation_id)
-            if msg.recommendation_id is not None
-            else None
+            str(msg.recommendation_id) if msg.recommendation_id is not None else None
         ),
     )
 
