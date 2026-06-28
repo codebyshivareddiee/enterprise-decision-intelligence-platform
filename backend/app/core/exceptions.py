@@ -56,3 +56,22 @@ class ExternalServiceError(PlatformError):
             code="EXTERNAL_SERVICE_ERROR",
         )
         self.service = service
+
+
+class EntityNotFound(NotFoundError):
+    """Raised when a specific entity is not found in the repository."""
+    pass
+
+
+class DuplicateEntity(PlatformError):
+    """Raised when attempting to create an entity that already exists."""
+    
+    def __init__(self, message: str = "Entity already exists.") -> None:
+        super().__init__(message=message, code="DUPLICATE_ENTITY")
+
+
+class RepositoryError(PlatformError):
+    """Raised when an underlying repository operation fails."""
+    
+    def __init__(self, message: str = "Repository operation failed.") -> None:
+        super().__init__(message=message, code="REPOSITORY_ERROR")

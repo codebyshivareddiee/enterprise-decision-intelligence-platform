@@ -1,0 +1,115 @@
+"""Verify the API layer endpoints against the running application.
+
+This script uses httpx.AsyncClient with the FastAPI application directly
+so we don't need to spin up a background server process.
+"""
+
+import asyncio
+from uuid import UUID
+
+import httpx
+
+from app.main import app
+
+async def main() -> None:
+    """Verify all API endpoints sequentially."""
+    print("Starting API verification against actual app...")
+
+    # Use ASGITransport to talk to the ASGI app directly
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://testserver/api/v1") as client:
+        
+        # 1. Health
+        print("\n--- Testing GET /health ---")
+        response = await client.get("/health")
+        print(f"Status: {response.status_code}")
+        print(f"Body: {response.json()}")
+        assert response.status_code == 200, "Health check failed"
+
+        # 2. Create Organization
+        print("\n--- Testing POST /organizations ---")
+        org_payload = {
+            "name": "Acme Corp",
+            "industry": "Manufacturing",
+            "size": "ENTERPRISE",
+            "status": "ACTIVE"
+        }
+        response = await client.post("/organizations", json=org_payload)
+        print(f"Status: {response.status_code}")
+        org_data = response.json()
+        print(f"Body: {org_data}")
+        assert response.status_code == 201, "Create organization failed"
+        org_id = org_data["id"]
+
+        # 3. Create Workspace
+        print("\n--- Testing POST /workspaces ---")
+        ws_payload = {
+            "organization_id": org_id,
+            "name": "Factory Automation Hub",
+            "description": "Managing automation decisions",
+            "status": "ACTIVE"
+        }
+        response = await client.post("/workspaces", json=ws_payload)
+        print(f"Status: {response.status_code}")
+        ws_data = response.json()
+        print(f"Body: {ws_data}")
+        assert response.status_code == 201, "Create workspace failed"
+        ws_id = ws_data["id"]
+
+        # 4. Upload Knowledge
+        print("\n--- Testing POST /knowledge/upload ---")
+        # We need a dummy file
+        files = {
+            "file": ("test_doc.txt", b"This is a test document about factory machines.", "text/plain")
+        }
+        data = {
+            "workspace_id": ws_id,
+            "organization_id": org_id,
+            "description": "Test factory documentation"
+        }
+        response = await client.post("/knowledge/upload", data=data, files=files)
+        print(f"Status: {response.status_code}")
+        print(f"Body: {response.json()}")
+        assert response.status_code == 200, "Upload knowledge failed"
+
+        # 5. Search Knowledge
+        print("\n--- Testing POST /knowledge/search ---")
+        response = await client.post(
+            "/knowledge/search", 
+            params={"organization_id": org_id, "query": "factory machines", "top_k": 3}
+        )
+        print(f"Status: {response.status_code}")
+        print(f"Body: {response.json()}")
+        assert response.status_code == 200, "Search knowledge failed"
+
+        # 6. Execute Decision Workflow
+        print("\n--- Testing POST /decisions/execute ---")
+        execute_payload = {
+            "workspace_id": ws_id,
+            "user_request": "Should we upgrade machine X to a newer model?"
+        }
+        response = await client.post("/decisions/execute", json=execute_payload)
+        print(f"Status: {response.status_code}")
+        exec_data = response.json()
+        print(f"Body: {exec_data}")
+        # Note: Depending on Planner/Workflow mocking or real API availability, this might fail or succeed. 
+        # For now, just print the response.
+        if response.status_code == 200:
+            decision_id = exec_data["decision_id"]
+            
+            # 7. Record Outcome
+            print("\n--- Testing POST /decisions/outcome ---")
+            outcome_payload = {
+                "decision_id": decision_id,
+                "human_decision": "Approve the upgrade",
+                "feedback": "Upgrading will reduce downtime by 15%",
+                "final_outcome": None
+            }
+            response = await client.post("/decisions/outcome", json=outcome_payload)
+            print(f"Status: {response.status_code}")
+            print(f"Body: {response.json()}")
+
+    print("\nAPI verification completed.")
+
+
+if __name__ == "__main__":
+    asyncio.run(main())

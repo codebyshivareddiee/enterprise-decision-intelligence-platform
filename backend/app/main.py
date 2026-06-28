@@ -44,7 +44,10 @@ def create_app() -> FastAPI:
         lifespan=lifespan,
     )
 
-    # ── CORS ────────────────────────────────────────────────────────────────
+    # ── Middleware ──────────────────────────────────────────────────────────
+    from app.api.middleware import register_middleware  # noqa: PLC0415
+    register_middleware(app)
+
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.app_cors_origins,
@@ -53,10 +56,16 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
 
+    # ── Exception Handlers ──────────────────────────────────────────────────
+    from app.api.exception_handlers import register_exception_handlers  # noqa: PLC0415
+    register_exception_handlers(app)
+
     # ── Routers ─────────────────────────────────────────────────────────────
     from app.core.routes import router as core_router  # noqa: PLC0415
+    from app.api.router import api_router  # noqa: PLC0415
 
     app.include_router(core_router)
+    app.include_router(api_router)
 
     return app
 
