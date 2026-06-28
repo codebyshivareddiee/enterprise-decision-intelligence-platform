@@ -2,6 +2,7 @@
 
 from uuid import UUID
 from app.models.knowledge_asset import KnowledgeAsset
+from app.models.knowledge_schema import KnowledgeSchema
 from app.knowledge.manager.document_processor import DocumentProcessor
 from app.knowledge.search.search_service import SearchService
 from app.knowledge.interfaces.vector_store import VectorStore
@@ -32,11 +33,16 @@ class KnowledgeManager:
         self.vector_store = vector_store
         self.search_service = search_service
 
-    async def index_asset(self, asset: KnowledgeAsset) -> list[str]:
+    async def index_asset(
+        self, 
+        asset: KnowledgeAsset, 
+        available_schemas: list[KnowledgeSchema]
+    ) -> list[str]:
         """Index a new knowledge asset into the vector store.
         
         Args:
             asset: The KnowledgeAsset domain object to index.
+            available_schemas: List of available schemas for the analyzer to choose from.
             
         Returns:
             A list of Qdrant point IDs representing the inserted chunks.
@@ -45,7 +51,7 @@ class KnowledgeManager:
             KnowledgeLayerError: If the ingestion fails.
         """
         try:
-            prepared_chunks = await self.document_processor.process(asset)
+            prepared_chunks = await self.document_processor.process(asset, available_schemas)
             point_ids = await self.vector_store.upsert_chunks(prepared_chunks)
             return point_ids
         except Exception as e:
@@ -101,13 +107,18 @@ class KnowledgeManager:
                 raise KnowledgeLayerError(f"Failed to delete asset {asset_id} from vector store: {str(e)}") from e
             raise
 
-    async def reindex_asset(self, asset: KnowledgeAsset) -> list[str]:
+    async def reindex_asset(
+        self, 
+        asset: KnowledgeAsset, 
+        available_schemas: list[KnowledgeSchema]
+    ) -> list[str]:
         """Re-index an existing knowledge asset.
         
         This will delete any existing chunks for the asset and insert new ones.
         
         Args:
             asset: The KnowledgeAsset domain object to re-index.
+            available_schemas: List of available schemas.
             
         Returns:
             A list of new Qdrant point IDs representing the inserted chunks.
@@ -117,7 +128,7 @@ class KnowledgeManager:
         """
         try:
             await self.delete_asset(asset.id)
-            return await self.index_asset(asset)
+            return await self.index_asset(asset, available_schemas)
         except Exception as e:
             if not isinstance(e, KnowledgeLayerError):
                 raise KnowledgeLayerError(f"Failed to reindex asset {asset.id}: {str(e)}") from e

@@ -6,7 +6,7 @@ from app.knowledge.interfaces.chunker import DocumentChunker
 from app.knowledge.models.chunk import DocumentChunk
 from app.knowledge.exceptions import ChunkingError
 
-class TextChunker(DocumentChunker):
+class SlidingWindowChunker(DocumentChunker):
     """Splits text into chunks of a specific size with overlap."""
 
     def __init__(self, chunk_size: int = 800, chunk_overlap: int = 150) -> None:

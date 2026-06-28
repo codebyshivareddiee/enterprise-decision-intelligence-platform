@@ -23,8 +23,8 @@ from app.knowledge.manager.knowledge_manager import KnowledgeManager
 from app.knowledge.manager.document_processor import DocumentProcessor
 from app.knowledge.search.search_service import SearchService
 from app.knowledge.parsers.registry import ParserRegistry
-from app.knowledge.chunkers.text_chunker import TextChunker
 from app.knowledge.embedding.openai_embedder import OpenAIEmbedder
+from app.knowledge.analyzer.ai_based import AIDocumentAnalyzer
 from app.knowledge.sparse.fastembed_sparse_generator import FastEmbedSparseGenerator
 from app.knowledge.vectorstore.qdrant_store import QdrantStore
 
@@ -72,7 +72,6 @@ async def main():
         # 5. Initialize Knowledge Manager
         print("Initializing Knowledge Manager components...")
         parser_registry = ParserRegistry()
-        chunker = TextChunker()
         embedder = OpenAIEmbedder(client=openai_client, model=settings.openai_embedding_model)
         sparse_generator = FastEmbedSparseGenerator()
         vector_store = QdrantStore(
@@ -86,9 +85,9 @@ async def main():
 
         document_processor = DocumentProcessor(
             parser_registry=parser_registry,
-            chunker=chunker,
             dense_embedder=embedder,
-            sparse_generator=sparse_generator
+            sparse_generator=sparse_generator,
+            ai_analyzer=AIDocumentAnalyzer(client=openai_client)
         )
         search_service = SearchService(
             dense_embedder=embedder,
@@ -168,7 +167,7 @@ async def main():
         
         # 7. Index Asset
         print("Indexing asset through KnowledgeManager...")
-        point_ids = await knowledge_manager.index_asset(asset)
+        point_ids = await knowledge_manager.index_asset(asset, [schema])
         
         # Update asset in MongoDB to simulate what a real repository/workflow would do
         asset.status = AssetStatus.READY

@@ -28,5 +28,8 @@ class KnowledgeAssetDocument(TypedDict):
     qdrant_point_ids: list[str]
     processing_error: str | None
     uploaded_by: str                # User UUID as string
+    lifecycle_state: str | None
+    user_description: str | None
+    processing_metadata: dict[str, Any] | None
     created_at: datetime
     updated_at: datetime
