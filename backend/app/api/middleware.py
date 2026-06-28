@@ -21,11 +21,26 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
     ) -> Response:
         """Process the request, bind context vars, and add tracking headers."""
         request_id = request.headers.get("X-Request-ID") or str(uuid.uuid4())
-        
-        # In a real system, these might come from auth tokens
+        # Extract from Headers initially (e.g. for request_id)
         organization_id = request.headers.get("X-Organization-ID", "unknown")
         workspace_id = request.headers.get("X-Workspace-ID", "unknown")
         user_id = request.headers.get("X-User-ID", "unknown")
+        roles = "unknown"
+
+        # If Authorization header exists, decode statelessly to enrich context
+        auth_header = request.headers.get("Authorization")
+        if auth_header and auth_header.startswith("Bearer "):
+            token = auth_header[7:]
+            from app.auth.jwt import decode_token
+            payload = decode_token(token)
+            if payload:
+                user_id = payload.get("sub", user_id)
+                orgs = payload.get("organization_ids", [])
+                if orgs:
+                    organization_id = ",".join(orgs)
+                role_list = payload.get("roles", [])
+                if role_list:
+                    roles = ",".join(role_list)
 
         # Bind to structlog context vars
         structlog.contextvars.bind_contextvars(
@@ -33,6 +48,7 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
             organization_id=organization_id,
             workspace_id=workspace_id,
             user_id=user_id,
+            roles=roles,
         )
 
         start_time = time.perf_counter()

@@ -8,8 +8,13 @@ from app.api.dependencies import get_workspace_repository
 from app.core.exceptions import EntityNotFound
 from app.models.workspace import Workspace
 from app.persistence.mongodb.repositories.workspace_repository import WorkspaceRepository
+from app.auth.dependencies import get_current_user, require_permission
+from app.auth.permissions import Permission
 
-router = APIRouter(tags=["Workspaces"])
+router = APIRouter(
+    tags=["Workspaces"],
+    dependencies=[Depends(get_current_user)]
+)
 
 
 @router.post(
@@ -18,6 +23,7 @@ router = APIRouter(tags=["Workspaces"])
     summary="Create a new workspace",
     description="Registers a new workspace under an organization.",
     status_code=201,
+    dependencies=[Depends(require_permission(Permission.MANAGE_WORKSPACES))],
 )
 async def create_workspace(
     workspace: Workspace,
@@ -49,6 +55,7 @@ async def get_workspace(
     response_model=Workspace,
     summary="Update a workspace",
     description="Partially updates an existing workspace.",
+    dependencies=[Depends(require_permission(Permission.MANAGE_WORKSPACE))],
 )
 async def update_workspace(
     workspace_id: UUID,
@@ -76,11 +83,4 @@ async def list_org_workspaces(
     repo: WorkspaceRepository = Depends(get_workspace_repository),
 ) -> list[Workspace]:
     """List workspaces for a specific organization."""
-    # We assume list_by_organization exists, if not we fall back to generic list
-    # The actual repo might not have list_by_organization implemented yet, but we will call it if it does
-    if hasattr(repo, "list_by_organization"):
-        return await repo.list_by_organization(org_id)
-    
-    # Fallback to fetching all and filtering (only for MVP phase)
-    all_ws = await repo.list(limit=1000)
-    return [ws for ws in all_ws if ws.organization_id == org_id]
+    return await repo.list(organization_id=org_id, limit=1000)

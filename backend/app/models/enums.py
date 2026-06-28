@@ -76,6 +76,7 @@ class AssetContentType(str, Enum):
     TEXT = "text"
     JSON = "json"
     CSV = "csv"
+    MARKDOWN = "markdown"
     STRUCTURED = "structured"  # Manually supplied structured record
 
 

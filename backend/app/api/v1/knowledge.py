@@ -12,8 +12,14 @@ from app.models.enums import AssetContentType, AssetStatus
 from app.models.knowledge_asset import KnowledgeAsset
 from app.persistence.mongodb.repositories.knowledge_asset_repository import KnowledgeAssetRepository
 from app.models.knowledge_schema import KnowledgeSchema
+from app.auth.dependencies import get_current_user, require_permission
+from app.auth.permissions import Permission
 
-router = APIRouter(prefix="/knowledge", tags=["Knowledge"])
+router = APIRouter(
+    prefix="/knowledge", 
+    tags=["Knowledge"],
+    dependencies=[Depends(get_current_user)]
+)
 
 
 @router.post(
@@ -21,6 +27,7 @@ router = APIRouter(prefix="/knowledge", tags=["Knowledge"])
     response_model=KnowledgeUploadResponse,
     summary="Upload a new knowledge document",
     description="Uploads a file, processes it, and indexes it into the vector store.",
+    dependencies=[Depends(require_permission(Permission.UPLOAD_KNOWLEDGE))],
 )
 async def upload_knowledge(
     workspace_id: UUID = Form(...),
@@ -70,7 +77,7 @@ async def upload_knowledge(
     point_ids = await knowledge_manager.index_asset(asset, available_schemas=[])
     
     asset.qdrant_point_ids = point_ids
-    asset.status = AssetStatus.PROCESSED
+    asset.status = AssetStatus.READY
     await repo.update(asset)
     
     # Extract metadata for response
@@ -90,6 +97,7 @@ async def upload_knowledge(
     "/search",
     response_model=KnowledgeSearchResponse,
     summary="Search knowledge assets",
+    dependencies=[Depends(require_permission(Permission.SEARCH_KNOWLEDGE))],
 )
 async def search_knowledge(
     organization_id: UUID,
@@ -120,9 +128,12 @@ async def list_assets(
     skip: int = 0,
     limit: int = 100,
     repo: KnowledgeAssetRepository = Depends(get_knowledge_asset_repository),
+    current_user = Depends(get_current_user),
 ) -> list[KnowledgeAsset]:
     """List knowledge assets."""
-    return await repo.list(skip=skip, limit=limit)
+    return await repo.list(
+        organization_id=current_user.organization_id, skip=skip, limit=limit
+    )
 
 
 @router.get(

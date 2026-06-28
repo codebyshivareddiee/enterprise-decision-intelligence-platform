@@ -30,8 +30,14 @@ from app.workflow.context import ExecutionContext, RuntimeConfig
 from app.workflow.models import WorkflowState
 from app.workflow.registry import AgentRegistry
 from app.workflow.runtime import WorkflowRuntime
+from app.auth.dependencies import get_current_user, require_permission
+from app.auth.permissions import Permission
 
-router = APIRouter(prefix="/decisions", tags=["Decisions"])
+router = APIRouter(
+    prefix="/decisions", 
+    tags=["Decisions"],
+    dependencies=[Depends(get_current_user)]
+)
 
 # For demonstration, we keep a global MemorySaver instance.
 # In production, this would be backed by Redis or Postgres checkpointer.
@@ -42,6 +48,7 @@ _checkpointer = MemorySaver()
     "/execute",
     response_model=WorkflowExecuteResponse,
     summary="Execute a decision workflow",
+    dependencies=[Depends(require_permission(Permission.EXECUTE_WORKFLOWS))],
 )
 async def execute_decision(
     request: WorkflowExecuteRequest,
@@ -105,6 +112,7 @@ async def execute_decision(
     "/{decision_id}/resume",
     response_model=WorkflowStatusResponse,
     summary="Resume a paused workflow",
+    dependencies=[Depends(require_permission(Permission.RESUME_WORKFLOWS))],
 )
 async def resume_decision(
     decision_id: UUID,
@@ -146,6 +154,7 @@ async def resume_decision(
     "/outcome",
     response_model=DecisionHistory,
     summary="Record a decision outcome",
+    dependencies=[Depends(require_permission(Permission.RECORD_OUTCOMES))],
 )
 async def record_outcome(
     request: DecisionOutcomeRequest,

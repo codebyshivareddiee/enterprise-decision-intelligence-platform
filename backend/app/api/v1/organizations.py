@@ -8,8 +8,14 @@ from app.api.dependencies import get_organization_repository
 from app.core.exceptions import EntityNotFound
 from app.models.organization import Organization
 from app.persistence.mongodb.repositories.organization_repository import OrganizationRepository
+from app.auth.dependencies import get_current_user, require_permission
+from app.auth.permissions import Permission
 
-router = APIRouter(prefix="/organizations", tags=["Organizations"])
+router = APIRouter(
+    prefix="/organizations", 
+    tags=["Organizations"],
+    dependencies=[Depends(get_current_user)]
+)
 
 
 @router.post(
@@ -18,6 +24,7 @@ router = APIRouter(prefix="/organizations", tags=["Organizations"])
     summary="Create a new organization",
     description="Registers a new organization within the platform.",
     status_code=201,
+    dependencies=[Depends(require_permission(Permission.MANAGE_ORGANIZATIONS))],
 )
 async def create_organization(
     org: Organization,
@@ -64,6 +71,7 @@ async def get_organization(
     response_model=Organization,
     summary="Update an organization",
     description="Partially updates an existing organization.",
+    dependencies=[Depends(require_permission(Permission.MANAGE_ORGANIZATIONS))],
 )
 async def update_organization(
     org_id: UUID,
