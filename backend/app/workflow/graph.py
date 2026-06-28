@@ -2,13 +2,13 @@
 
 from typing import Any, Literal
 
+import structlog
 from langgraph.graph import END, START, StateGraph
 from langgraph.types import Send
 
 from app.agents.planner.schemas import FailureStrategy, WorkflowArtifact
 from app.workflow.context import ExecutionContext
 from app.workflow.models import WorkflowState
-import structlog
 
 logger = structlog.get_logger(__name__)
 
@@ -40,16 +40,18 @@ class WorkflowGraphBuilder:
                 produces=node_def.produces,
             ):
                 async def node_wrapper(state: WorkflowState) -> dict[str, Any]:
-                    import time
                     import inspect
-                    
+                    import time
+
                     start_time = time.time()
                     logger.info(f"[{step_to_wrap.step_id}] Started execution...")
-                    
+
                     consumed_names = [a.value for a in consumes]
                     if consumed_names:
-                        logger.debug(f"[{step_to_wrap.step_id}] Consuming artifacts: {consumed_names}")
-                    
+                        logger.debug(
+                            f"[{step_to_wrap.step_id}] Consuming artifacts: {consumed_names}"
+                        )
+
                     updates: dict[str, Any] = {}
 
                     # Validate consumes
@@ -58,7 +60,10 @@ class WorkflowGraphBuilder:
                         if getattr(state, field_name, None) is None:
                             error_msg = f"Missing artifact {artifact.value} for step {step_to_wrap.step_id}"
                             logger.error(f"[{step_to_wrap.step_id}] ERROR: {error_msg}")
-                            if step_to_wrap.failure_strategy == FailureStrategy.FAIL_PLAN:
+                            if (
+                                step_to_wrap.failure_strategy
+                                == FailureStrategy.FAIL_PLAN
+                            ):
                                 return {
                                     "failed_steps": [step_to_wrap.step_id],
                                     "errors": [error_msg],
@@ -76,41 +81,58 @@ class WorkflowGraphBuilder:
                         if isinstance(node_updates, WorkflowState):
                             dumped = node_updates.model_dump()
                             produced_keys = {a.value.lower() for a in produces}
-                            node_updates = {k: dumped[k] for k in produced_keys if k in dumped}
-                            
+                            node_updates = {
+                                k: dumped[k] for k in produced_keys if k in dumped
+                            }
+
                         if isinstance(node_updates, dict):
                             # Allow whatever the agent explicitly put in the dict, plus our extracted produces
                             updates.update(node_updates)
-                            
+
                         # Validate produces
                         produced_names = [a.value for a in produces]
                         if produced_names:
-                            logger.debug(f"[{step_to_wrap.step_id}] Expected to produce: {produced_names}")
-                            
+                            logger.debug(
+                                f"[{step_to_wrap.step_id}] Expected to produce: {produced_names}"
+                            )
+
                         for artifact in produces:
                             field_name = artifact.value.lower()
-                            if updates.get(field_name) is None and getattr(state, field_name, None) is None:
-                                raise ValueError(f"Agent failed to produce declared artifact: {artifact.value}")
+                            if (
+                                updates.get(field_name) is None
+                                and getattr(state, field_name, None) is None
+                            ):
+                                raise ValueError(
+                                    f"Agent failed to produce declared artifact: {artifact.value}"
+                                )
 
                         # Add completion tracking
                         updates["completed_steps"] = [step_to_wrap.step_id]
-                        
+
                         execution_time = time.time() - start_time
-                        logger.info(f"[{step_to_wrap.step_id}] Success in {execution_time:.2f}s")
-                        
+                        logger.info(
+                            f"[{step_to_wrap.step_id}] Success in {execution_time:.2f}s"
+                        )
+
                         available_artifacts = [
-                            art.value for art in WorkflowArtifact 
-                            if getattr(state, art.value.lower(), None) is not None or art.value.lower() in updates
+                            art.value
+                            for art in WorkflowArtifact
+                            if getattr(state, art.value.lower(), None) is not None
+                            or art.value.lower() in updates
                         ]
-                        logger.debug(f"[{step_to_wrap.step_id}] WorkflowState now contains: {available_artifacts}")
-                        
+                        logger.debug(
+                            f"[{step_to_wrap.step_id}] WorkflowState now contains: {available_artifacts}"
+                        )
+
                         return updates
 
                     except Exception as e:
                         execution_time = time.time() - start_time
                         error_msg = f"Step {step_to_wrap.step_id} failed: {str(e)}"
-                        logger.error(f"[{step_to_wrap.step_id}] Failed in {execution_time:.2f}s: {error_msg}")
-                        
+                        logger.error(
+                            f"[{step_to_wrap.step_id}] Failed in {execution_time:.2f}s: {error_msg}"
+                        )
+
                         error_updates: dict[str, Any] = {
                             "failed_steps": [step_to_wrap.step_id],
                             "errors": [error_msg],

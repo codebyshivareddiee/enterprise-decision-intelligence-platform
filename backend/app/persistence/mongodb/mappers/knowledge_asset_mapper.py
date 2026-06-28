@@ -32,7 +32,11 @@ def to_document(asset: KnowledgeAsset) -> KnowledgeAssetDocument:
         uploaded_by=str(asset.uploaded_by),
         lifecycle_state=asset.lifecycle_state,
         user_description=asset.user_description,
-        processing_metadata=asset.processing_metadata.model_dump() if asset.processing_metadata else None,
+        processing_metadata=(
+            asset.processing_metadata.model_dump()
+            if asset.processing_metadata
+            else None
+        ),
         created_at=asset.created_at,
         updated_at=asset.updated_at,
     )
@@ -55,7 +59,11 @@ def to_domain(doc: KnowledgeAssetDocument) -> KnowledgeAsset:
         uploaded_by=UUID(doc["uploaded_by"]),
         lifecycle_state=doc.get("lifecycle_state"),
         user_description=doc.get("user_description"),
-        processing_metadata=ProcessingMetadata(**doc["processing_metadata"]) if doc.get("processing_metadata") else None,
+        processing_metadata=(
+            ProcessingMetadata(**doc["processing_metadata"])
+            if doc.get("processing_metadata")
+            else None
+        ),
         created_at=doc["created_at"],
         updated_at=doc["updated_at"],
     )

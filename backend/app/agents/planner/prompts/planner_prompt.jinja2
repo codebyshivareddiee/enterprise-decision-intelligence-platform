@@ -30,12 +30,9 @@ The Orchestrator will use this contract to validate state and route data between
 
 # Inputs Provided
 - User Request: The goal the user wants to achieve.
-- Organization: {{ organization.name }}
-- Workspace: {{ workspace.name }}
-- Selected Knowledge Assets: {{ knowledge_assets }}
-- Knowledge Schema: {{ knowledge_schema }}
-- Business Rules: {{ business_rules }}
-- Workspace Preferences: {{ workspace_preferences }}
+- Organization: {{ organization.name if organization else 'None' }}
+- Workspace Decision Context: {{ workspace_decision_context }}
+
 - Lifecycle States: {{ lifecycle }}
 - Enabled Agents: {{ enabled_agents }}
 - Execution History: {{ execution_history }}

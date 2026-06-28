@@ -1,6 +1,5 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from enum import Enum
-from typing import Optional
 from uuid import UUID, uuid4
 
 from pydantic import BaseModel, EmailStr, Field
@@ -8,11 +7,12 @@ from pydantic import BaseModel, EmailStr, Field
 
 def now_utc() -> datetime:
     """Return the current time in UTC."""
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 class Role(str, Enum):
     """RBAC Roles."""
+
     PLATFORM_ADMIN = "PLATFORM_ADMIN"
     ORGANIZATION_ADMIN = "ORGANIZATION_ADMIN"
     WORKSPACE_ADMIN = "WORKSPACE_ADMIN"
@@ -23,6 +23,7 @@ class Role(str, Enum):
 
 class Membership(BaseModel):
     """User access mapping."""
+
     organization_id: UUID
     workspace_ids: list[UUID] = Field(default_factory=list)
     role: Role
@@ -30,6 +31,7 @@ class Membership(BaseModel):
 
 class User(BaseModel):
     """User domain model."""
+
     id: UUID = Field(default_factory=uuid4)
     email: EmailStr
     hashed_password: str
@@ -40,15 +42,17 @@ class User(BaseModel):
     created_at: datetime = Field(default_factory=now_utc)
     updated_at: datetime = Field(default_factory=now_utc)
 
+
 class AuditEvent(BaseModel):
     """Audit log entry."""
+
     id: UUID = Field(default_factory=uuid4)
     timestamp: datetime = Field(default_factory=now_utc)
     request_id: str
-    user_id: Optional[str] = None
-    organization_id: Optional[str] = None
-    workspace_id: Optional[str] = None
+    user_id: str | None = None
+    organization_id: str | None = None
+    workspace_id: str | None = None
     action: str
     result: str
-    ip_address: Optional[str] = None
-    details: Optional[dict] = None
+    ip_address: str | None = None
+    details: dict | None = None

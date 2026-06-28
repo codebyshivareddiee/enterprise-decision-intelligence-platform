@@ -3,9 +3,10 @@
 from fastapi import APIRouter, Depends, Request, status
 from fastapi.security import OAuth2PasswordRequestForm
 
-from app.api.dependencies import get_auth_service, get_audit_repository
+from app.api.dependencies import get_audit_repository, get_auth_service
+from app.api.v1.models.response import StandardResponse
 from app.auth.dependencies import require_authenticated_user
-from app.auth.models import User, AuditEvent
+from app.auth.models import AuditEvent, User
 from app.auth.schemas import (
     ChangePasswordRequest,
     LoginRequest,
@@ -15,12 +16,15 @@ from app.auth.schemas import (
     UserResponse,
 )
 from app.auth.service import AuthService
-from app.api.v1.models.response import StandardResponse
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
 
-@router.post("/register", response_model=StandardResponse[UserResponse], status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/register",
+    response_model=StandardResponse[UserResponse],
+    status_code=status.HTTP_201_CREATED,
+)
 async def register(
     request_data: RegisterRequest,
     request: Request,
@@ -62,19 +66,20 @@ async def refresh(
 
 @router.post("/logout", response_model=StandardResponse[dict])
 async def logout(
-    request: Request,
-    audit_repo = Depends(get_audit_repository)
+    request: Request, audit_repo=Depends(get_audit_repository)
 ) -> StandardResponse[dict]:
     """Logout endpoint."""
     user_id_str = getattr(request.state, "user_id", None)
-    
-    await audit_repo.log_event(AuditEvent(
-        request_id=getattr(request.state, "request_id", ""),
-        user_id=user_id_str,
-        action="logout",
-        result="success"
-    ))
-    
+
+    await audit_repo.log_event(
+        AuditEvent(
+            request_id=getattr(request.state, "request_id", ""),
+            user_id=user_id_str,
+            action="logout",
+            result="success",
+        )
+    )
+
     return StandardResponse(
         success=True,
         data={},
@@ -85,8 +90,7 @@ async def logout(
 
 @router.get("/me", response_model=StandardResponse[UserResponse])
 async def get_me(
-    request: Request,
-    current_user: User = Depends(require_authenticated_user())
+    request: Request, current_user: User = Depends(require_authenticated_user())
 ) -> StandardResponse[UserResponse]:
     return StandardResponse(
         success=True,

@@ -1,7 +1,6 @@
 """AuditRepository — Appends audit events to the ``audit_events`` collection."""
 
 from __future__ import annotations
-from typing import Any
 
 from motor.motor_asyncio import AsyncIOMotorDatabase
 

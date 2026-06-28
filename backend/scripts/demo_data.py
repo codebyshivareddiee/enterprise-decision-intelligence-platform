@@ -1,8 +1,10 @@
-from app.models.organization import Organization
-from app.models.workspace import Workspace
+from app.models.business_rule import BusinessRule
+from app.models.enums import (
+    FieldType,
+)
 from app.models.knowledge_schema import KnowledgeSchema, SchemaField
-from app.models.business_rule import BusinessRule, RuleCondition
-from app.models.enums import UserRole, UserStatus, WorkspaceStatus, FieldType, AssetContentType, AssetStatus, DecisionOutcome, RuleType
+from app.models.organization import Organization
+
 
 class DemoScenario:
     def __init__(
@@ -13,7 +15,7 @@ class DemoScenario:
         workspace_name: str,
         workspace_description: str,
         schema: KnowledgeSchema,
-        rules: list[BusinessRule]
+        rules: list[BusinessRule],
     ):
         self.id = id
         self.name = name
@@ -23,36 +25,78 @@ class DemoScenario:
         self.schema = schema
         self.rules = rules
 
+
 def get_demo_scenarios() -> dict[str, DemoScenario]:
     # --- Scenario 1: Hiring AI Engineer ---
     hiring_org = Organization(
-        name="Acme Corporation", domains=["acme.com"], slug="acme-corp", contact_email="contact@acme.com"
+        name="Acme Corporation",
+        domains=["acme.com"],
+        slug="acme-corp",
+        contact_email="contact@acme.com",
     )
     hiring_schema = KnowledgeSchema(
         organization_id=hiring_org.id,
         name="Candidate Profile",
         description="Profile schema for AI Engineer candidates",
         fields=[
-            SchemaField(name="name", label="Name", field_type=FieldType.STRING, required=True),
-            SchemaField(name="skills", label="Skills", field_type=FieldType.LIST, required=True),
-            SchemaField(name="years_experience", label="Years of Experience", field_type=FieldType.INTEGER, required=False),
-        ]
+            SchemaField(
+                name="name", label="Name", field_type=FieldType.STRING, required=True
+            ),
+            SchemaField(
+                name="skills", label="Skills", field_type=FieldType.LIST, required=True
+            ),
+            SchemaField(
+                name="years_experience",
+                label="Years of Experience",
+                field_type=FieldType.INTEGER,
+                required=False,
+            ),
+        ],
+        default_chunk_strategy="HeadingChunker",
+        default_chunk_profile="MEDIUM",
+        default_retrieval_strategy="semantic_hybrid",
     )
-    
+
     # --- Scenario 2: Software Vendor Evaluation ---
     vendor_org = Organization(
-        name="TechGlobal Inc", domains=["techglobal.com"], slug="techglobal", contact_email="procurement@techglobal.com"
+        name="TechGlobal Inc",
+        domains=["techglobal.com"],
+        slug="techglobal",
+        contact_email="procurement@techglobal.com",
     )
     vendor_schema = KnowledgeSchema(
         organization_id=vendor_org.id,
         name="Software Vendor Profile",
         description="Evaluation profiles for third-party software vendors",
         fields=[
-            SchemaField(name="vendor_name", label="Vendor Name", field_type=FieldType.STRING, required=True),
-            SchemaField(name="cost", label="Annual Cost", field_type=FieldType.INTEGER, required=True),
-            SchemaField(name="strengths", label="Key Strengths", field_type=FieldType.LIST, required=False),
-            SchemaField(name="weaknesses", label="Weaknesses", field_type=FieldType.LIST, required=False),
-        ]
+            SchemaField(
+                name="vendor_name",
+                label="Vendor Name",
+                field_type=FieldType.STRING,
+                required=True,
+            ),
+            SchemaField(
+                name="cost",
+                label="Annual Cost",
+                field_type=FieldType.INTEGER,
+                required=True,
+            ),
+            SchemaField(
+                name="strengths",
+                label="Key Strengths",
+                field_type=FieldType.LIST,
+                required=False,
+            ),
+            SchemaField(
+                name="weaknesses",
+                label="Weaknesses",
+                field_type=FieldType.LIST,
+                required=False,
+            ),
+        ],
+        default_chunk_strategy="HeadingChunker",
+        default_chunk_profile="LARGE",
+        default_retrieval_strategy="semantic_dense",
     )
 
     scenarios = {
@@ -63,7 +107,7 @@ def get_demo_scenarios() -> dict[str, DemoScenario]:
             workspace_name="Hiring AI Engineer",
             workspace_description="Workspace for evaluating AI engineering candidates.",
             schema=hiring_schema,
-            rules=[]
+            rules=[],
         ),
         "vendor": DemoScenario(
             id="vendor",
@@ -72,7 +116,7 @@ def get_demo_scenarios() -> dict[str, DemoScenario]:
             workspace_name="CRM Vendor Selection",
             workspace_description="Workspace for selecting the best CRM software vendor.",
             schema=vendor_schema,
-            rules=[]
-        )
+            rules=[],
+        ),
     }
     return scenarios

@@ -35,12 +35,8 @@ class Planner:
     async def generate_plan(
         self,
         user_request: str,
+        workspace_decision_context: dict[str, Any],
         organization: dict[str, Any] | None = None,
-        workspace: dict[str, Any] | None = None,
-        knowledge_assets: list[dict[str, Any]] | None = None,
-        knowledge_schema: dict[str, Any] | None = None,
-        business_rules: list[dict[str, Any]] | None = None,
-        workspace_preferences: dict[str, Any] | None = None,
         lifecycle: dict[str, Any] | None = None,
         enabled_agents: list[str] | None = None,
         execution_history: list[dict[str, Any]] | None = None,
@@ -49,15 +45,12 @@ class Planner:
 
         Args:
             user_request: The overarching goal the user wants to achieve.
+            workspace_decision_context: Complete context including Goal, Metrics, Rules, etc.
             organization: Organization context.
-            workspace: Workspace context.
-            knowledge_assets: Metadata of available knowledge assets.
-            knowledge_schema: The schema for the knowledge layer.
-            business_rules: Active business rules for the workspace.
-            workspace_preferences: Learned preference profiles.
             lifecycle: Workflow lifecycle states.
             enabled_agents: List of agents enabled in the registry.
             execution_history: Optional history of previous steps.
+
 
         Returns:
             ExecutionPlan: A structured DAG for the Orchestrator.
@@ -68,17 +61,7 @@ class Planner:
         # Render the prompt with provided context
         prompt_content = self._prompt_template.render(
             organization=json.dumps(organization) if organization else "None",
-            workspace=json.dumps(workspace) if workspace else "None",
-            knowledge_assets=(
-                json.dumps(knowledge_assets) if knowledge_assets else "None"
-            ),
-            knowledge_schema=(
-                json.dumps(knowledge_schema) if knowledge_schema else "None"
-            ),
-            business_rules=json.dumps(business_rules) if business_rules else "None",
-            workspace_preferences=(
-                json.dumps(workspace_preferences) if workspace_preferences else "None"
-            ),
+            workspace_decision_context=json.dumps(workspace_decision_context),
             lifecycle=json.dumps(lifecycle) if lifecycle else "None",
             enabled_agents=json.dumps(enabled_agents) if enabled_agents else "None",
             execution_history=(

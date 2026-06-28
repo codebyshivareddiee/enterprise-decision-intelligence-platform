@@ -5,11 +5,11 @@ from uuid import UUID
 from fastapi import Depends, Request
 from fastapi.security import OAuth2PasswordBearer
 
+from app.api.dependencies import get_auth_service
 from app.auth.exceptions import AuthError, ForbiddenError
 from app.auth.models import Role, User
 from app.auth.permissions import Permission, has_permission
 from app.auth.service import AuthService
-from app.api.dependencies import get_auth_service
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login")
 
@@ -38,7 +38,7 @@ def require_role(role: Role):
     ) -> User:
         if any(m.role == Role.PLATFORM_ADMIN for m in current_user.memberships):
             return current_user
-            
+
         has_role = any(m.role == role for m in current_user.memberships)
         if not has_role:
             raise ForbiddenError(f"Requires role {role.value}")

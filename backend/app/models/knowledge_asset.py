@@ -20,15 +20,27 @@ from app.models.enums import AssetContentType, AssetStatus
 
 class ProcessingMetadata(BaseModel):
     """Metadata detailing how the asset was processed by the ingestion pipeline."""
-    chunking_strategy: str = Field(description="Name of the chunker used (e.g., HeadingChunker)")
+
+    chunking_strategy: str = Field(
+        description="Name of the chunker used (e.g., HeadingChunker)"
+    )
     chunk_profile: str = Field(description="Chunk profile used (e.g., SMALL, MEDIUM)")
     chunk_size: int = Field(description="Selected chunk size in characters")
     chunk_overlap: int = Field(description="Selected chunk overlap in characters")
-    selection_method: str = Field(description="Method used to decide chunking (rule_based, ai, manual)")
-    reasoning: str | None = Field(default=None, description="Explanation of why this strategy was chosen")
-    confidence: float = Field(description="Confidence score (0.0 to 1.0) of the selection method")
+    selection_method: str = Field(
+        description="Method used to decide chunking (rule_based, ai, manual)"
+    )
+    reasoning: str | None = Field(
+        default=None, description="Explanation of why this strategy was chosen"
+    )
+    confidence: float = Field(
+        description="Confidence score (0.0 to 1.0) of the selection method"
+    )
     processing_version: str = Field(description="Version of the processing pipeline")
-    processed_at: datetime = Field(default_factory=datetime.utcnow, description="When the asset was processed")
+    processed_at: datetime = Field(
+        default_factory=datetime.utcnow, description="When the asset was processed"
+    )
+
 
 class KnowledgeAsset(AuditedModel):
     """A single knowledge record or document owned by an Organization.
@@ -54,7 +66,7 @@ class KnowledgeAsset(AuditedModel):
         raw_content: The original text content (or JSON-serialised
             structured data). Stored here for reference; the processed
             chunks live in Qdrant.
-        structured_data: Schema-conformant field values extracted from
+        dynamic_metadata: Schema-conformant field values extracted from
             the asset. Keys match ``SchemaField.name`` values.
         file_path: Optional path or URL to the source file in object
             storage (e.g., S3/GCS). ``None`` for manually entered
@@ -92,7 +104,7 @@ class KnowledgeAsset(AuditedModel):
         default=None,
         description="Original text content or JSON-serialised structured data.",
     )
-    structured_data: dict[str, object] = Field(
+    dynamic_metadata: dict[str, object] = Field(
         default_factory=dict,
         description=(
             "Schema-conformant field values. Keys must match SchemaField.name "
@@ -128,4 +140,8 @@ class KnowledgeAsset(AuditedModel):
         default=None,
         description="Details on how the Knowledge Layer decided to parse and chunk this document.",
     )
-
+    content_hash: str | None = Field(
+        default=None,
+        max_length=256,
+        description="Hash of the document content to detect duplicates and support incremental indexing.",
+    )

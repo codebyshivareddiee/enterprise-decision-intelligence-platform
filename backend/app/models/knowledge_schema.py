@@ -146,3 +146,18 @@ class KnowledgeSchema(AuditedModel):
         ge=1,
         description="Schema version number. Starts at 1.",
     )
+    default_chunk_strategy: str | None = Field(
+        default=None,
+        max_length=100,
+        description="Default chunking strategy for assets of this schema (e.g. 'HeadingChunker').",
+    )
+    default_chunk_profile: str | None = Field(
+        default=None,
+        max_length=50,
+        description="Default chunk profile for assets of this schema (e.g. 'MEDIUM').",
+    )
+    default_retrieval_strategy: str | None = Field(
+        default=None,
+        max_length=100,
+        description="Default retrieval strategy to apply when querying chunks of this schema.",
+    )

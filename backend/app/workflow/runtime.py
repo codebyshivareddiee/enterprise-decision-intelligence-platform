@@ -19,7 +19,9 @@ class WorkflowRuntime:
         self.builder = WorkflowGraphBuilder(self.context)
         self.graph = self.builder.build()
 
-    async def start(self, initial_state: WorkflowState, thread_id: str) -> WorkflowState:
+    async def start(
+        self, initial_state: WorkflowState, thread_id: str
+    ) -> WorkflowState:
         """Start the execution of the workflow plan."""
         config = {"configurable": {"thread_id": thread_id}}
 

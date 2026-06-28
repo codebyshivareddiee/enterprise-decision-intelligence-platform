@@ -33,6 +33,7 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
         if auth_header and auth_header.startswith("Bearer "):
             token = auth_header[7:]
             from app.auth.jwt import decode_token
+
             payload = decode_token(token)
             if payload:
                 user_id = payload.get("sub", user_id)
@@ -63,7 +64,7 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
             process_time = time.perf_counter() - start_time
             # Only log valid status codes if response was returned normally
             # If an exception was raised and not caught by an exception handler, response is not bound
-            status_code = response.status_code if 'response' in locals() else 500
+            status_code = response.status_code if "response" in locals() else 500
 
             # Do not log sensitive endpoints or health checks aggressively if desired,
             # but for now we log all.
