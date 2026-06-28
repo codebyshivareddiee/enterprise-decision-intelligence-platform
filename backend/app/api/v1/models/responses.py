@@ -15,6 +15,8 @@ class HealthResponse(BaseModel):
     status: str
     api_version: str
     build_version: str
+    environment: str = "unknown"
+    uptime_seconds: int = 0
     dependencies: dict[str, Any]
 
 
