@@ -22,7 +22,7 @@ The Orchestrator will use this contract to validate state and route data between
 
 # Available Agents
 - RETRIEVER: Fetches relevant knowledge chunks from Qdrant based on semantic search.
-- RULE_CHECKER: Applies deterministic business rules to filter out invalid entities.
+- RULE_CHECKER: Validates the final recommendation against deterministic business rules. Must run after RECOMMENDATION and consumes RECOMMENDATION.
 - REASONING: Applies probabilistic LLM reasoning to evaluate and score entities.
 - RECOMMENDATION: Ranks scored entities to produce final recommendations.
 - EXPLANATION: Generates human-readable rationales for recommendations.

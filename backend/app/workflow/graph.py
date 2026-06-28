@@ -5,7 +5,7 @@ from typing import Any, Literal
 from langgraph.graph import END, START, StateGraph
 from langgraph.types import Send
 
-from app.agents.planner.schemas import FailureStrategy
+from app.agents.planner.schemas import FailureStrategy, WorkflowArtifact
 from app.workflow.context import ExecutionContext
 from app.workflow.models import WorkflowState
 
@@ -34,42 +34,80 @@ class WorkflowGraphBuilder:
                 step_to_wrap=step,
                 node_impl=node_def.node_implementation,
                 consumes=node_def.consumes,
+                produces=node_def.produces,
             ):
-                def node_wrapper(state: WorkflowState) -> dict[str, Any]:
+                async def node_wrapper(state: WorkflowState) -> dict[str, Any]:
+                    import time
+                    import inspect
+                    
+                    start_time = time.time()
+                    print(f"\n[{step_to_wrap.step_id}] Started execution...")
+                    
+                    consumed_names = [a.value for a in consumes]
+                    if consumed_names:
+                        print(f"[{step_to_wrap.step_id}] Consuming artifacts: {consumed_names}")
+                    
                     updates: dict[str, Any] = {}
 
                     # Validate consumes
                     for artifact in consumes:
                         field_name = artifact.value.lower()
                         if getattr(state, field_name, None) is None:
-                            if (
-                                step_to_wrap.failure_strategy
-                                == FailureStrategy.FAIL_PLAN
-                            ):
+                            error_msg = f"Missing artifact {artifact.value} for step {step_to_wrap.step_id}"
+                            print(f"[{step_to_wrap.step_id}] ERROR: {error_msg}")
+                            if step_to_wrap.failure_strategy == FailureStrategy.FAIL_PLAN:
                                 return {
                                     "failed_steps": [step_to_wrap.step_id],
-                                    "errors": [
-                                        f"Missing artifact {artifact.value} for step {step_to_wrap.step_id}"
-                                    ],
+                                    "errors": [error_msg],
                                 }
 
                     try:
-                        # Invoke the actual implementation
-                        # Node implementations should return a dict of updates
-                        node_updates = node_impl(state)
+                        # Invoke the actual implementation (async or sync)
+                        if inspect.iscoroutinefunction(node_impl):
+                            node_updates = await node_impl(state)
+                        else:
+                            node_updates = node_impl(state)
+                            if inspect.isawaitable(node_updates):
+                                node_updates = await node_updates
+
+                        if isinstance(node_updates, WorkflowState):
+                            dumped = node_updates.model_dump()
+                            produced_keys = {a.value.lower() for a in produces}
+                            node_updates = {k: dumped[k] for k in produced_keys if k in dumped}
+                            
                         if isinstance(node_updates, dict):
+                            # Allow whatever the agent explicitly put in the dict, plus our extracted produces
                             updates.update(node_updates)
-                        elif isinstance(node_updates, WorkflowState):
-                            # If it returns a full state object, extract non-default or changed fields
-                            # To be safe, just take the dict representation (excluding unset)
-                            updates.update(node_updates.model_dump(exclude_unset=True))
+                            
+                        # Validate produces
+                        produced_names = [a.value for a in produces]
+                        if produced_names:
+                            print(f"[{step_to_wrap.step_id}] Expected to produce: {produced_names}")
+                            
+                        for artifact in produces:
+                            field_name = artifact.value.lower()
+                            if updates.get(field_name) is None and getattr(state, field_name, None) is None:
+                                raise ValueError(f"Agent failed to produce declared artifact: {artifact.value}")
 
                         # Add completion tracking
                         updates["completed_steps"] = [step_to_wrap.step_id]
+                        
+                        execution_time = time.time() - start_time
+                        print(f"[{step_to_wrap.step_id}] Success in {execution_time:.2f}s")
+                        
+                        available_artifacts = [
+                            art.value for art in WorkflowArtifact 
+                            if getattr(state, art.value.lower(), None) is not None or art.value.lower() in updates
+                        ]
+                        print(f"[{step_to_wrap.step_id}] WorkflowState now contains: {available_artifacts}")
+                        
                         return updates
 
                     except Exception as e:
+                        execution_time = time.time() - start_time
                         error_msg = f"Step {step_to_wrap.step_id} failed: {str(e)}"
+                        print(f"[{step_to_wrap.step_id}] Failed in {execution_time:.2f}s: {error_msg}")
+                        
                         error_updates: dict[str, Any] = {
                             "failed_steps": [step_to_wrap.step_id],
                             "errors": [error_msg],

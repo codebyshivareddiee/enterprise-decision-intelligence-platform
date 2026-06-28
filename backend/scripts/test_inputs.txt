@@ -1,0 +1,13 @@
+vendor
+1
+Vendor Name: AcmeSoft. Cost: 5000. Key Strengths: robust API, scalable. Weaknesses: complex UI.
+AcmeSoft vendor evaluation profile.
+2
+Recommend the best CRM vendor for our sales team.
+Y
+3
+vendor-acmesoft
+APPROVED
+Great API capabilities that fit our technical requirements.
+4
+5

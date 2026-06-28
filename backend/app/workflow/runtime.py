@@ -19,29 +19,24 @@ class WorkflowRuntime:
         self.builder = WorkflowGraphBuilder(self.context)
         self.graph = self.builder.build()
 
-    def start(self, initial_state: WorkflowState, thread_id: str) -> WorkflowState:
+    async def start(self, initial_state: WorkflowState, thread_id: str) -> WorkflowState:
         """Start the execution of the workflow plan."""
         config = {"configurable": {"thread_id": thread_id}}
 
         try:
-            # stream_mode="values" will yield state updates.
-            # We just want to invoke it to completion or interrupt.
-            final_state = self.graph.invoke(initial_state, config=config)
+            final_state = await self.graph.ainvoke(initial_state, config=config)
 
-            # Since LangGraph returns dicts for state when using TypedDict, or Pydantic if configured,
-            # we ensure the return is always a WorkflowState object.
             if isinstance(final_state, dict):
                 return WorkflowState(**final_state)
             return final_state
         except Exception as e:
             raise WorkflowExecutionError(f"Workflow execution failed: {str(e)}") from e
 
-    def resume(self, thread_id: str, feedback: Any = None) -> WorkflowState:
+    async def resume(self, thread_id: str, feedback: Any = None) -> WorkflowState:
         """Resume an interrupted workflow after human review."""
         config = {"configurable": {"thread_id": thread_id}}
 
-        # Get the current state
-        state_snapshot = self.graph.get_state(config)
+        state_snapshot = await self.graph.aget_state(config)
         if not state_snapshot:
             raise WorkflowExecutionError(
                 f"No active state found for thread_id: {thread_id}"
@@ -54,16 +49,14 @@ class WorkflowRuntime:
         if not current_state.is_interrupted:
             raise WorkflowExecutionError("Workflow is not currently interrupted.")
 
-        # Clear the interrupt flag and apply feedback
         update_payload: dict[str, Any] = {"is_interrupted": False}
         if feedback is not None:
             update_payload["human_feedback"] = feedback
 
-        # Update state manually and resume
-        self.graph.update_state(config, update_payload)
+        await self.graph.aupdate_state(config, update_payload)
 
         try:
-            final_state = self.graph.invoke(None, config=config)
+            final_state = await self.graph.ainvoke(None, config=config)
 
             if isinstance(final_state, dict):
                 return WorkflowState(**final_state)
