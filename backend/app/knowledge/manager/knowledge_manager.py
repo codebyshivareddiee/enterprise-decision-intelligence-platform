@@ -1,18 +1,17 @@
 """Knowledge Manager."""
 
 from uuid import UUID
-
-from app.knowledge.exceptions import KnowledgeLayerError
-from app.knowledge.interfaces.vector_store import VectorStore
-from app.knowledge.manager.document_processor import DocumentProcessor
-from app.knowledge.models.search import MetadataFilter, SearchResult
-from app.knowledge.search.search_service import SearchService
 from app.models.knowledge_asset import KnowledgeAsset
-
+from app.models.knowledge_schema import KnowledgeSchema
+from app.knowledge.manager.document_processor import DocumentProcessor
+from app.knowledge.search.search_service import SearchService
+from app.knowledge.interfaces.vector_store import VectorStore
+from app.knowledge.models.search import MetadataFilter, SearchResult
+from app.knowledge.exceptions import KnowledgeLayerError
 
 class KnowledgeManager:
     """Main interface for the Knowledge Layer.
-
+    
     Coordinates the ingestion, retrieval, and lifecycle of knowledge assets.
     The rest of the platform should only communicate with this manager.
     """
@@ -24,7 +23,7 @@ class KnowledgeManager:
         search_service: SearchService,
     ) -> None:
         """Initialize the knowledge manager.
-
+        
         Args:
             document_processor: Coordinates parsing, chunking, and embedding.
             vector_store: The vector database for storing/deleting chunks.
@@ -34,47 +33,50 @@ class KnowledgeManager:
         self.vector_store = vector_store
         self.search_service = search_service
 
-    async def index_asset(self, asset: KnowledgeAsset) -> list[str]:
+    async def index_asset(
+        self, 
+        asset: KnowledgeAsset, 
+        available_schemas: list[KnowledgeSchema]
+    ) -> list[str]:
         """Index a new knowledge asset into the vector store.
-
+        
         Args:
             asset: The KnowledgeAsset domain object to index.
-
+            available_schemas: List of available schemas for the analyzer to choose from.
+            
         Returns:
             A list of Qdrant point IDs representing the inserted chunks.
-
+            
         Raises:
             KnowledgeLayerError: If the ingestion fails.
         """
         try:
-            prepared_chunks = await self.document_processor.process(asset)
+            prepared_chunks = await self.document_processor.process(asset, available_schemas)
             point_ids = await self.vector_store.upsert_chunks(prepared_chunks)
             return point_ids
         except Exception as e:
             if not isinstance(e, KnowledgeLayerError):
-                raise KnowledgeLayerError(
-                    f"Failed to index asset {asset.id}: {str(e)}"
-                ) from e
+                raise KnowledgeLayerError(f"Failed to index asset {asset.id}: {str(e)}") from e
             raise
 
     async def retrieve(
-        self,
-        organization_id: UUID,
-        selected_asset_ids: list[UUID] | None,
-        query: str,
-        top_k: int = 10,
+        self, 
+        organization_id: UUID, 
+        selected_asset_ids: list[UUID] | None, 
+        query: str, 
+        top_k: int = 10
     ) -> list[SearchResult]:
         """Retrieve relevant knowledge chunks for a query.
-
+        
         Args:
             organization_id: The ID of the organization to scope the search.
             selected_asset_ids: Optional list of specific asset IDs to filter by.
             query: The search query text.
             top_k: The number of results to return.
-
+            
         Returns:
             A list of SearchResult objects containing the relevant chunks.
-
+            
         Raises:
             KnowledgeLayerError: If retrieval fails.
         """
@@ -83,22 +85,18 @@ class KnowledgeManager:
                 organization_id=organization_id,
                 selected_asset_ids=selected_asset_ids,
             )
-            return await self.search_service.search(
-                query=query, filters=filters, top_k=top_k
-            )
+            return await self.search_service.search(query=query, filters=filters, top_k=top_k)
         except Exception as e:
             if not isinstance(e, KnowledgeLayerError):
-                raise KnowledgeLayerError(
-                    f"Failed to retrieve chunks for query '{query}': {str(e)}"
-                ) from e
+                raise KnowledgeLayerError(f"Failed to retrieve chunks for query '{query}': {str(e)}") from e
             raise
 
     async def delete_asset(self, asset_id: UUID) -> None:
         """Delete all indexed chunks for a given asset.
-
+        
         Args:
             asset_id: The ID of the asset to remove from the vector store.
-
+            
         Raises:
             KnowledgeLayerError: If deletion fails.
         """
@@ -106,31 +104,32 @@ class KnowledgeManager:
             await self.vector_store.delete_by_asset_id(asset_id)
         except Exception as e:
             if not isinstance(e, KnowledgeLayerError):
-                raise KnowledgeLayerError(
-                    f"Failed to delete asset {asset_id} from vector store: {str(e)}"
-                ) from e
+                raise KnowledgeLayerError(f"Failed to delete asset {asset_id} from vector store: {str(e)}") from e
             raise
 
-    async def reindex_asset(self, asset: KnowledgeAsset) -> list[str]:
+    async def reindex_asset(
+        self, 
+        asset: KnowledgeAsset, 
+        available_schemas: list[KnowledgeSchema]
+    ) -> list[str]:
         """Re-index an existing knowledge asset.
-
+        
         This will delete any existing chunks for the asset and insert new ones.
-
+        
         Args:
             asset: The KnowledgeAsset domain object to re-index.
-
+            available_schemas: List of available schemas.
+            
         Returns:
             A list of new Qdrant point IDs representing the inserted chunks.
-
+            
         Raises:
             KnowledgeLayerError: If re-indexing fails.
         """
         try:
             await self.delete_asset(asset.id)
-            return await self.index_asset(asset)
+            return await self.index_asset(asset, available_schemas)
         except Exception as e:
             if not isinstance(e, KnowledgeLayerError):
-                raise KnowledgeLayerError(
-                    f"Failed to reindex asset {asset.id}: {str(e)}"
-                ) from e
+                raise KnowledgeLayerError(f"Failed to reindex asset {asset.id}: {str(e)}") from e
             raise

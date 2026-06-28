@@ -9,7 +9,7 @@ from app.knowledge.models.chunk import DocumentChunk
 from app.models.knowledge_asset import KnowledgeAsset
 
 
-class TextChunker(DocumentChunker):
+class SlidingWindowChunker(DocumentChunker):
     """Splits text into chunks of a specific size with overlap."""
 
     def __init__(self, chunk_size: int = 800, chunk_overlap: int = 150) -> None:
