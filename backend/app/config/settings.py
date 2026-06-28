@@ -29,6 +29,12 @@ class Settings(BaseSettings):
     app_log_level: str = "INFO"
     app_cors_origins: str | list[str] = ["http://localhost:3000"]
     secret_key: str = "change-me"
+    
+    # ── Authentication & Authorization ───────────────────────────────────────
+    jwt_secret_key: str = "super-secret-jwt-key-change-me"
+    jwt_algorithm: str = "HS256"
+    access_token_expire_minutes: int = 15
+    refresh_token_expire_days: int = 7
 
     # ── MongoDB Atlas ────────────────────────────────────────────────────────
     mongodb_uri: str = "mongodb://localhost:27017"
