@@ -24,14 +24,50 @@ class WorkflowRuntime:
     ) -> WorkflowState:
         """Start the execution of the workflow plan."""
         config = {"configurable": {"thread_id": thread_id}}
+        import time
+
+        start_time = time.time()
+
+        import structlog
+
+        from app.core.metrics import WORKFLOW_DURATION, WORKFLOWS_TOTAL
+
+        logger = structlog.get_logger(__name__)
 
         try:
             final_state = await self.graph.ainvoke(initial_state, config=config)
+
+            duration = time.time() - start_time
+            WORKFLOWS_TOTAL.labels(status="success").inc()
+            WORKFLOW_DURATION.labels(status="success").observe(duration)
+
+            logger.info(
+                "workflow_execution_completed",
+                workflow_id=thread_id,
+                total_duration_ms=round(duration * 1000, 2),
+                human_review_required=(
+                    final_state.get("is_interrupted", False)
+                    if isinstance(final_state, dict)
+                    else final_state.is_interrupted
+                ),
+                success=True,
+            )
 
             if isinstance(final_state, dict):
                 return WorkflowState(**final_state)
             return final_state
         except Exception as e:
+            duration = time.time() - start_time
+            WORKFLOWS_TOTAL.labels(status="error").inc()
+            WORKFLOW_DURATION.labels(status="error").observe(duration)
+
+            logger.error(
+                "workflow_execution_failed",
+                workflow_id=thread_id,
+                total_duration_ms=round(duration * 1000, 2),
+                success=False,
+                error=str(e),
+            )
             raise WorkflowExecutionError(f"Workflow execution failed: {str(e)}") from e
 
     async def resume(self, thread_id: str, feedback: Any = None) -> WorkflowState:

@@ -88,17 +88,33 @@ class KnowledgeManager:
             results: dict[UUID, list[str]] = {}
             to_process = []
 
+            import structlog
+
+            from app.core.metrics import (
+                AI_OVERRIDE_DECISIONS,
+                DOCUMENTS_PROCESSED_TOTAL,
+                DUPLICATE_DOCUMENTS_TOTAL,
+                KNOWLEDGE_DEFAULTS_USED,
+                RULE_BASED_DECISIONS,
+            )
+
+            logger = structlog.get_logger(__name__)
+
             # Incremental indexing logic
             existing_by_name = {a.name: a for a in existing_assets if a.name}
             existing_by_hash = {
                 a.content_hash: a for a in existing_assets if a.content_hash
             }
 
+            duplicates_count = 0
+
             for asset in assets:
                 # If identical document -> skip entirely
                 if asset.content_hash and asset.content_hash in existing_by_hash:
                     # Skip indexing (it's identical)
                     results[asset.id] = []
+                    duplicates_count += 1
+                    DUPLICATE_DOCUMENTS_TOTAL.inc()
                     continue
 
                 # If modified document (same name, different hash) -> re-index
@@ -111,12 +127,23 @@ class KnowledgeManager:
                 to_process.append(asset)
 
             if not to_process:
+                logger.info(
+                    "knowledge_batch_ingestion_completed",
+                    batch_size=len(assets),
+                    sample_size=0,
+                    duplicate_documents=duplicates_count,
+                    documents_skipped=duplicates_count,
+                )
                 return results
 
             # Process the batch using the batch-optimized processor
             processed_results = await self.document_processor.process_batch(
                 to_process, available_schemas, batch_description
             )
+
+            schema_defaults_used = 0
+            rule_based_decisions = 0
+            ai_override_decisions = 0
 
             # Upsert all chunks
             for processed_asset, prepared_chunks in processed_results:
@@ -125,6 +152,38 @@ class KnowledgeManager:
                     results[processed_asset.id] = point_ids
                 else:
                     results[processed_asset.id] = []
+
+                # Metrics
+                if processed_asset.processing_metadata:
+                    method = processed_asset.processing_metadata.selection_method
+                    if method == "schema_default":
+                        schema_defaults_used += 1
+                        KNOWLEDGE_DEFAULTS_USED.inc()
+                    elif method == "rule_based":
+                        rule_based_decisions += 1
+                        RULE_BASED_DECISIONS.inc()
+                    elif method == "ai":
+                        ai_override_decisions += 1
+                        AI_OVERRIDE_DECISIONS.inc()
+
+                    status = (
+                        "success" if not processed_asset.processing_error else "error"
+                    )
+                    DOCUMENTS_PROCESSED_TOTAL.labels(
+                        status=status,
+                        chunk_strategy=processed_asset.processing_metadata.chunking_strategy,
+                    ).inc()
+
+            logger.info(
+                "knowledge_batch_ingestion_completed",
+                batch_size=len(assets),
+                sample_size=min(5, len(to_process)),
+                duplicate_documents=duplicates_count,
+                documents_skipped=duplicates_count,
+                schema_defaults_used=schema_defaults_used,
+                rule_based_decisions=rule_based_decisions,
+                ai_override_decisions=ai_override_decisions,
+            )
 
             # Workspace Summary Auto-generation
             # Since KnowledgeManager doesn't directly mutate the Workspace model (it's injected),
@@ -194,6 +253,14 @@ class KnowledgeManager:
             if values:
                 avg = sum(values) / len(values)
                 summary["semantic_summaries"][f"average_{key}"] = round(avg, 1)
+
+        # Record Prometheus workspace metrics (Gauges — represent current totals)
+        from app.core.metrics import WORKSPACE_ASSETS, WORKSPACE_SCHEMAS
+
+        if assets:
+            org_id = str(assets[0].organization_id)
+            WORKSPACE_ASSETS.labels(workspace_id=org_id).set(len(assets))
+            WORKSPACE_SCHEMAS.labels(workspace_id=org_id).set(len(schemas))
 
         return summary
 

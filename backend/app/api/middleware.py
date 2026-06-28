@@ -26,6 +26,8 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
         organization_id = request.headers.get("X-Organization-ID", "unknown")
         workspace_id = request.headers.get("X-Workspace-ID", "unknown")
         user_id = request.headers.get("X-User-ID", "unknown")
+        decision_id = request.headers.get("X-Decision-ID", "unknown")
+        workflow_id = request.headers.get("X-Workflow-ID", "unknown")
         roles = "unknown"
 
         # If Authorization header exists, decode statelessly to enrich context
@@ -51,6 +53,8 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
             workspace_id=workspace_id,
             user_id=user_id,
             roles=roles,
+            decision_id=decision_id,
+            workflow_id=workflow_id,
         )
 
         start_time = time.perf_counter()
@@ -75,6 +79,19 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
                 status_code=status_code,
                 process_time_ms=round(process_time * 1000, 2),
             )
+
+            # Prometheus Metrics
+            from app.core.metrics import REQUEST_DURATION, REQUESTS_TOTAL
+
+            REQUESTS_TOTAL.labels(
+                method=request.method,
+                endpoint=request.url.path,
+                status_code=status_code,
+            ).inc()
+
+            REQUEST_DURATION.labels(
+                method=request.method, endpoint=request.url.path
+            ).observe(process_time)
 
         response.headers["X-Request-ID"] = request_id
         response.headers["X-Process-Time"] = str(process_time)

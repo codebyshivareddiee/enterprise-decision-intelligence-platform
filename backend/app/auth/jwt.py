@@ -32,9 +32,7 @@ def create_refresh_token(data: dict[str, Any]) -> str:
     """Create a new JWT refresh token."""
     settings = get_settings()
     to_encode = data.copy()
-    expire = datetime.now(UTC) + timedelta(
-        days=settings.refresh_token_expire_days
-    )
+    expire = datetime.now(UTC) + timedelta(days=settings.refresh_token_expire_days)
 
     to_encode.update({"exp": expire})
     encoded_jwt = jwt.encode(

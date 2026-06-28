@@ -110,8 +110,35 @@ class WorkflowGraphBuilder:
                         updates["completed_steps"] = [step_to_wrap.step_id]
 
                         execution_time = time.time() - start_time
+
+                        from app.core.metrics import (
+                            AGENT_ARTIFACTS,
+                            AGENT_DURATION,
+                            AGENT_EXECUTIONS_TOTAL,
+                        )
+
+                        AGENT_EXECUTIONS_TOTAL.labels(
+                            agent_type=step_to_wrap.agent_name, status="success"
+                        ).inc()
+                        AGENT_DURATION.labels(
+                            agent_type=step_to_wrap.agent_name
+                        ).observe(execution_time)
+                        AGENT_ARTIFACTS.labels(
+                            agent_type=step_to_wrap.agent_name,
+                            artifact_action="consumed",
+                        ).inc(len(consumes))
+                        AGENT_ARTIFACTS.labels(
+                            agent_type=step_to_wrap.agent_name,
+                            artifact_action="produced",
+                        ).inc(len(produces))
+
                         logger.info(
-                            f"[{step_to_wrap.step_id}] Success in {execution_time:.2f}s"
+                            f"[{step_to_wrap.step_id}] Success in {execution_time:.2f}s",
+                            agent_type=step_to_wrap.agent_name,
+                            execution_duration_ms=round(execution_time * 1000, 2),
+                            success=True,
+                            artifacts_consumed=len(consumes),
+                            artifacts_produced=len(produces),
                         )
 
                         available_artifacts = [
@@ -128,9 +155,33 @@ class WorkflowGraphBuilder:
 
                     except Exception as e:
                         execution_time = time.time() - start_time
+
+                        from app.core.metrics import (
+                            AGENT_ARTIFACTS,
+                            AGENT_DURATION,
+                            AGENT_EXECUTIONS_TOTAL,
+                        )
+
+                        AGENT_EXECUTIONS_TOTAL.labels(
+                            agent_type=step_to_wrap.agent_name, status="error"
+                        ).inc()
+                        AGENT_DURATION.labels(
+                            agent_type=step_to_wrap.agent_name
+                        ).observe(execution_time)
+                        AGENT_ARTIFACTS.labels(
+                            agent_type=step_to_wrap.agent_name,
+                            artifact_action="consumed",
+                        ).inc(len(consumes))
+
                         error_msg = f"Step {step_to_wrap.step_id} failed: {str(e)}"
                         logger.error(
-                            f"[{step_to_wrap.step_id}] Failed in {execution_time:.2f}s: {error_msg}"
+                            f"[{step_to_wrap.step_id}] Failed in {execution_time:.2f}s: {error_msg}",
+                            agent_type=step_to_wrap.agent_name,
+                            execution_duration_ms=round(execution_time * 1000, 2),
+                            success=False,
+                            failure_reason=str(e),
+                            artifacts_consumed=len(consumes),
+                            artifacts_produced=0,
                         )
 
                         error_updates: dict[str, Any] = {

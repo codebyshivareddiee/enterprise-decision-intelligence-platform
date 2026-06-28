@@ -2,11 +2,12 @@
 
 import time
 import uuid
-from typing import Any
+from typing import Any, cast
 
 import openai
 import structlog
 from openai import AsyncOpenAI
+from openai.types.chat import ChatCompletion
 from pydantic import BaseModel
 from tenacity import (
     retry,
@@ -90,14 +91,58 @@ class OpenAIProvider(LLMProvider):
                     },
                 }
 
-            completion = await self.client.chat.completions.create(**kwargs)
+            completion: ChatCompletion = cast(
+                ChatCompletion,
+                await self.client.chat.completions.create(**kwargs),
+            )
 
-            if completion.choices[0].message.refusal:
+            if not completion.choices:
+                raise InvalidResponseError("Model returned an empty choices list.")
+
+            message = completion.choices[0].message
+
+            refusal = getattr(message, "refusal", None)
+            if refusal:
                 raise InvalidResponseError(
-                    f"Model refused to generate output: {completion.choices[0].message.refusal}"
+                    f"Model refused to generate output: {refusal}"
                 )
 
-            content = completion.choices[0].message.content or ""
+            content: str = message.content or ""
+            elapsed = time.time() - start_time
+
+            usage = completion.usage
+            prompt_tokens: int = usage.prompt_tokens if usage else 0
+            completion_tokens: int = usage.completion_tokens if usage else 0
+            total_tokens: int = usage.total_tokens if usage else 0
+
+            from app.core.metrics import LLM_LATENCY, LLM_REQUESTS_TOTAL, LLM_TOKENS
+
+            LLM_REQUESTS_TOTAL.labels(
+                provider="openai",
+                model=self.chat_model,
+                operation="generate",
+                status="success",
+            ).inc()
+            LLM_LATENCY.labels(
+                provider="openai", model=self.chat_model, operation="generate"
+            ).observe(elapsed)
+            LLM_TOKENS.labels(
+                provider="openai", model=self.chat_model, token_type="prompt"
+            ).inc(prompt_tokens)
+            LLM_TOKENS.labels(
+                provider="openai", model=self.chat_model, token_type="completion"
+            ).inc(completion_tokens)
+
+            logger.info(
+                "llm_generate_success",
+                execution_time_s=round(elapsed, 3),
+                latency_ms=round(elapsed * 1000, 2),
+                prompt_tokens=prompt_tokens,
+                completion_tokens=completion_tokens,
+                total_tokens=total_tokens,
+                success=True,
+                **log_ctx,
+            )
 
             if response_schema:
                 try:
@@ -107,18 +152,29 @@ class OpenAIProvider(LLMProvider):
                         f"Failed to parse model output into schema: {e}"
                     ) from e
 
-            elapsed = time.time() - start_time
-            logger.info(
-                "llm_generate_success", execution_time_s=round(elapsed, 3), **log_ctx
-            )
             return content
 
+        except InvalidResponseError:
+            # Already a clean domain error (refusal, schema parse failure).
+            # Propagate as-is — do NOT re-map or double-count in metrics.
+            raise
         except Exception as e:
             elapsed = time.time() - start_time
+            from app.core.metrics import LLM_REQUESTS_TOTAL
+
+            LLM_REQUESTS_TOTAL.labels(
+                provider="openai",
+                model=self.chat_model,
+                operation="generate",
+                status="error",
+            ).inc()
             logger.error(
                 "llm_generate_error",
                 execution_time_s=round(elapsed, 3),
+                latency_ms=round(elapsed * 1000, 2),
                 error=str(e),
+                success=False,
+                failure_reason=str(e),
                 **log_ctx,
             )
             raise self._map_exception(e) from None
@@ -169,17 +225,54 @@ class OpenAIProvider(LLMProvider):
                 item.embedding for item in sorted(response.data, key=lambda x: x.index)
             ]
             elapsed = time.time() - start_time
+
+            prompt_tokens = response.usage.prompt_tokens if response.usage else 0
+            total_tokens = response.usage.total_tokens if response.usage else 0
+
+            from app.core.metrics import LLM_LATENCY, LLM_REQUESTS_TOTAL, LLM_TOKENS
+
+            LLM_REQUESTS_TOTAL.labels(
+                provider="openai",
+                model=self.embedding_model,
+                operation="embed",
+                status="success",
+            ).inc()
+            LLM_LATENCY.labels(
+                provider="openai", model=self.embedding_model, operation="embed"
+            ).observe(elapsed)
+            LLM_TOKENS.labels(
+                provider="openai", model=self.embedding_model, token_type="prompt"
+            ).inc(prompt_tokens)
+
             logger.info(
-                "llm_embed_success", execution_time_s=round(elapsed, 3), **log_ctx
+                "llm_embed_success",
+                execution_time_s=round(elapsed, 3),
+                latency_ms=round(elapsed * 1000, 2),
+                prompt_tokens=prompt_tokens,
+                completion_tokens=0,
+                total_tokens=total_tokens,
+                success=True,
+                **log_ctx,
             )
             return embeddings
 
         except Exception as e:
             elapsed = time.time() - start_time
+            from app.core.metrics import LLM_REQUESTS_TOTAL
+
+            LLM_REQUESTS_TOTAL.labels(
+                provider="openai",
+                model=self.embedding_model,
+                operation="embed",
+                status="error",
+            ).inc()
             logger.error(
                 "llm_embed_error",
                 execution_time_s=round(elapsed, 3),
+                latency_ms=round(elapsed * 1000, 2),
                 error=str(e),
+                success=False,
+                failure_reason=str(e),
                 **log_ctx,
             )
             raise EmbeddingError(str(self._map_exception(e))) from None

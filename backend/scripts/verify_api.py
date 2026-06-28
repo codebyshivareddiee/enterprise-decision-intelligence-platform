@@ -5,37 +5,46 @@ so we don't need to spin up a background server process.
 """
 
 import asyncio
+import uuid
+from dotenv import load_dotenv
+
+load_dotenv()
 
 import httpx
 from httpx import ASGITransport
 
-from app.main import app, lifespan
 from app.auth.dependencies import get_current_user
-from app.auth.models import User, Role, Membership
-import uuid
+from app.auth.models import Membership, Role, User
+from app.main import app, lifespan
+
 
 def mock_get_current_user() -> User:
     return User(
         id=uuid.uuid4(),
         email="admin@example.com",
+        full_name="Admin User",
         hashed_password="fake",
         memberships=[
             Membership(
-                organization_id=uuid.uuid4(),
-                role=Role.PLATFORM_ADMIN,
-                workspace_ids=[]
+                organization_id=uuid.uuid4(), role=Role.PLATFORM_ADMIN, workspace_ids=[]
             )
-        ]
+        ],
     )
 
+
 app.dependency_overrides[get_current_user] = mock_get_current_user
+
 
 async def main() -> None:
     """Verify all API endpoints sequentially."""
     print("Starting API verification against ASGI app...")
 
     async with lifespan(app):
-        async with httpx.AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver/api/v1", timeout=30.0) as client:
+        async with httpx.AsyncClient(
+            transport=ASGITransport(app=app),
+            base_url="http://testserver/api/v1",
+            timeout=30.0,
+        ) as client:
 
             # 1. Health
             print("\n--- Testing GET /health ---")
@@ -48,6 +57,8 @@ async def main() -> None:
             print("\n--- Testing POST /organizations ---")
             org_payload = {
                 "name": "Acme Corp",
+                "slug": "acme-corp",
+                "contact_email": "admin@acmecorp.com",
                 "industry": "Manufacturing",
                 "size": "ENTERPRISE",
                 "status": "ACTIVE",
@@ -57,15 +68,16 @@ async def main() -> None:
             org_data = response.json()
             print(f"Body: {org_data}")
             assert response.status_code == 201, "Create organization failed"
-            org_id = org_data["id"]
+            org_id = org_data["data"]["id"]
 
             # 3. Create Workspace
             print("\n--- Testing POST /workspaces ---")
             ws_payload = {
                 "organization_id": org_id,
+                "owner_id": str(uuid.uuid4()),
                 "name": "Factory Automation Hub",
                 "description": "Managing automation decisions",
-                "status": "ACTIVE",
+                "status": "active",
                 "goal": "Optimize factory operations",
                 "success_metrics": "Reduced downtime",
                 "decision_points": "Cost vs uptime",
@@ -76,7 +88,7 @@ async def main() -> None:
             ws_data = response.json()
             print(f"Body: {ws_data}")
             assert response.status_code == 201, "Create workspace failed"
-            ws_id = ws_data["id"]
+            ws_id = ws_data["data"]["id"]
 
             # 4. Upload Knowledge
             print("\n--- Testing POST /knowledge/upload ---")
@@ -102,7 +114,11 @@ async def main() -> None:
             print("\n--- Testing POST /knowledge/search ---")
             response = await client.post(
                 "/knowledge/search",
-                params={"organization_id": org_id, "query": "factory machines", "top_k": 3},
+                params={
+                    "organization_id": org_id,
+                    "query": "factory machines",
+                    "top_k": 3,
+                },
             )
             print(f"Status: {response.status_code}")
             print(f"Body: {response.json()}")
@@ -137,6 +153,5 @@ async def main() -> None:
 
         print("\nAPI verification completed.")
 
-
-    if __name__ == "__main__":
-        asyncio.run(main())
+if __name__ == "__main__":
+    asyncio.run(main())

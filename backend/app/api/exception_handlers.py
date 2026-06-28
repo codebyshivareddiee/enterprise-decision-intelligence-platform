@@ -22,8 +22,33 @@ from app.workflow.exceptions import MissingArtifactError as WorkflowMissingArtif
 from app.workflow.exceptions import WorkflowExecutionError
 
 
-def build_error_response(request: Request, message: str, error_code: str) -> dict:
+def build_error_response(
+    request: Request,
+    message: str,
+    error_code: str,
+    component: str = "API",
+    exc: Exception | None = None,
+) -> dict:
     req_id = getattr(request.state, "request_id", "")
+    workflow_id = request.headers.get("X-Workflow-ID", "unknown")
+
+    import traceback
+
+    import structlog
+
+    logger = structlog.get_logger(__name__)
+
+    logger.error(
+        "request_error",
+        request_id=req_id,
+        workflow_id=workflow_id,
+        component=component,
+        error_type=error_code,
+        error_message=message,
+        stacktrace=traceback.format_exc() if exc else None,
+        recoverable=False,
+    )
+
     return StandardErrorResponse(
         success=False,
         message=message,
@@ -42,7 +67,7 @@ def register_exception_handlers(app: FastAPI) -> None:
     ) -> JSONResponse:
         return JSONResponse(
             status_code=exc.status_code,
-            content=build_error_response(request, exc.detail, "HTTP_ERROR"),
+            content=build_error_response(request, exc.detail, "HTTP_ERROR", exc=exc),
         )
 
     @app.exception_handler(RequestValidationError)
@@ -51,14 +76,18 @@ def register_exception_handlers(app: FastAPI) -> None:
     ) -> JSONResponse:
         return JSONResponse(
             status_code=422,
-            content=build_error_response(request, str(exc), "VALIDATION_ERROR"),
+            content=build_error_response(
+                request, str(exc), "VALIDATION_ERROR", exc=exc
+            ),
         )
 
     @app.exception_handler(AuthError)
     async def auth_error_handler(request: Request, exc: AuthError) -> JSONResponse:
         return JSONResponse(
             status_code=401,
-            content=build_error_response(request, str(exc), "UNAUTHORIZED"),
+            content=build_error_response(
+                request, str(exc), "UNAUTHORIZED", component="Authentication", exc=exc
+            ),
         )
 
     @app.exception_handler(ForbiddenError)
@@ -67,7 +96,9 @@ def register_exception_handlers(app: FastAPI) -> None:
     ) -> JSONResponse:
         return JSONResponse(
             status_code=403,
-            content=build_error_response(request, str(exc), "FORBIDDEN"),
+            content=build_error_response(
+                request, str(exc), "FORBIDDEN", component="Authentication", exc=exc
+            ),
         )
 
     @app.exception_handler(ProviderError)
@@ -76,7 +107,9 @@ def register_exception_handlers(app: FastAPI) -> None:
     ) -> JSONResponse:
         return JSONResponse(
             status_code=502,
-            content=build_error_response(request, str(exc), "AI_PROVIDER_ERROR"),
+            content=build_error_response(
+                request, str(exc), "AI_PROVIDER_ERROR", component="AI", exc=exc
+            ),
         )
 
     @app.exception_handler(PlannerError)
@@ -85,7 +118,9 @@ def register_exception_handlers(app: FastAPI) -> None:
     ) -> JSONResponse:
         return JSONResponse(
             status_code=500,
-            content=build_error_response(request, str(exc), "PLANNER_ERROR"),
+            content=build_error_response(
+                request, str(exc), "PLANNER_ERROR", component="Planner", exc=exc
+            ),
         )
 
     @app.exception_handler(WorkflowExecutionError)
@@ -94,7 +129,9 @@ def register_exception_handlers(app: FastAPI) -> None:
     ) -> JSONResponse:
         return JSONResponse(
             status_code=500,
-            content=build_error_response(request, str(exc), "WORKFLOW_ERROR"),
+            content=build_error_response(
+                request, str(exc), "WORKFLOW_ERROR", component="Workflow", exc=exc
+            ),
         )
 
     @app.exception_handler(AgentMissingArtifactError)
@@ -103,7 +140,9 @@ def register_exception_handlers(app: FastAPI) -> None:
     ) -> JSONResponse:
         return JSONResponse(
             status_code=422,
-            content=build_error_response(request, str(exc), "MISSING_ARTIFACT"),
+            content=build_error_response(
+                request, str(exc), "MISSING_ARTIFACT", component="Agents", exc=exc
+            ),
         )
 
     @app.exception_handler(WorkflowMissingArtifactError)
@@ -112,7 +151,9 @@ def register_exception_handlers(app: FastAPI) -> None:
     ) -> JSONResponse:
         return JSONResponse(
             status_code=422,
-            content=build_error_response(request, str(exc), "MISSING_ARTIFACT"),
+            content=build_error_response(
+                request, str(exc), "MISSING_ARTIFACT", component="Workflow", exc=exc
+            ),
         )
 
     @app.exception_handler(EntityNotFound)
@@ -121,7 +162,9 @@ def register_exception_handlers(app: FastAPI) -> None:
     ) -> JSONResponse:
         return JSONResponse(
             status_code=404,
-            content=build_error_response(request, str(exc), "NOT_FOUND"),
+            content=build_error_response(
+                request, str(exc), "NOT_FOUND", component="Database", exc=exc
+            ),
         )
 
     @app.exception_handler(ValidationError)
@@ -130,7 +173,9 @@ def register_exception_handlers(app: FastAPI) -> None:
     ) -> JSONResponse:
         return JSONResponse(
             status_code=422,
-            content=build_error_response(request, str(exc), "DOMAIN_VALIDATION_ERROR"),
+            content=build_error_response(
+                request, str(exc), "DOMAIN_VALIDATION_ERROR", component="API", exc=exc
+            ),
         )
 
     @app.exception_handler(DuplicateEntity)
@@ -139,7 +184,9 @@ def register_exception_handlers(app: FastAPI) -> None:
     ) -> JSONResponse:
         return JSONResponse(
             status_code=409,
-            content=build_error_response(request, str(exc), "DUPLICATE_ENTITY"),
+            content=build_error_response(
+                request, str(exc), "DUPLICATE_ENTITY", component="Database", exc=exc
+            ),
         )
 
     @app.exception_handler(RepositoryError)
@@ -148,5 +195,7 @@ def register_exception_handlers(app: FastAPI) -> None:
     ) -> JSONResponse:
         return JSONResponse(
             status_code=500,
-            content=build_error_response(request, str(exc), "REPOSITORY_ERROR"),
+            content=build_error_response(
+                request, str(exc), "REPOSITORY_ERROR", component="Database", exc=exc
+            ),
         )

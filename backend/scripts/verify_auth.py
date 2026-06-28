@@ -2,16 +2,23 @@
 
 import asyncio
 import sys
+import uuid
+from dotenv import load_dotenv
+
+load_dotenv()
 import httpx
 from httpx import ASGITransport
+
 from app.main import app, lifespan
-import uuid
 
 BASE_URL = "http://testserver/api/v1"
 
+
 async def verify_auth() -> None:
     async with lifespan(app):
-        async with httpx.AsyncClient(transport=ASGITransport(app=app), base_url=BASE_URL, timeout=30.0) as client:
+        async with httpx.AsyncClient(
+            transport=ASGITransport(app=app), base_url=BASE_URL, timeout=30.0
+        ) as client:
             email = f"test_{uuid.uuid4()}@example.com"
             password = "SecurePassword123!"
 
@@ -60,7 +67,9 @@ async def verify_auth() -> None:
                 sys.exit(1)
 
             print("6. Refreshing token...")
-            resp = await client.post("/auth/refresh", json={"refresh_token": refresh_token})
+            resp = await client.post(
+                "/auth/refresh", json={"refresh_token": refresh_token}
+            )
             if resp.status_code != 200:
                 print(f"Refresh failed: {resp.text}")
                 sys.exit(1)
@@ -69,7 +78,10 @@ async def verify_auth() -> None:
             print("7. Changing password...")
             resp = await client.post(
                 "/auth/change-password",
-                json={"old_password": password, "new_password": "NewSecurePassword123!"},
+                json={
+                    "old_password": password,
+                    "new_password": "NewSecurePassword123!",
+                },
                 headers={"Authorization": f"Bearer {new_access_token}"},
             )
             if resp.status_code != 200:
@@ -78,7 +90,8 @@ async def verify_auth() -> None:
 
             print("8. Logging in with new password...")
             resp = await client.post(
-                "/auth/login", data={"username": email, "password": "NewSecurePassword123!"}
+                "/auth/login",
+                data={"username": email, "password": "NewSecurePassword123!"},
             )
             if resp.status_code != 200:
                 print("Login with new password failed")
@@ -86,6 +99,5 @@ async def verify_auth() -> None:
 
             print("All authentication verification checks passed! [OK]")
 
-
-    if __name__ == "__main__":
-        asyncio.run(verify_auth())
+if __name__ == "__main__":
+    asyncio.run(verify_auth())

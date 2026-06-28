@@ -60,12 +60,12 @@ class Planner:
         """
         # Render the prompt with provided context
         prompt_content = self._prompt_template.render(
-            organization=json.dumps(organization) if organization else "None",
-            workspace_decision_context=json.dumps(workspace_decision_context),
-            lifecycle=json.dumps(lifecycle) if lifecycle else "None",
-            enabled_agents=json.dumps(enabled_agents) if enabled_agents else "None",
+            organization=json.dumps(organization, default=str) if organization else "None",
+            workspace_decision_context=json.dumps(workspace_decision_context, default=str),
+            lifecycle=json.dumps(lifecycle, default=str) if lifecycle else "None",
+            enabled_agents=json.dumps(enabled_agents, default=str) if enabled_agents else "None",
             execution_history=(
-                json.dumps(execution_history) if execution_history else "None"
+                json.dumps(execution_history, default=str) if execution_history else "None"
             ),
         )
 

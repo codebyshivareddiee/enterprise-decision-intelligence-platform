@@ -1,7 +1,6 @@
 import asyncio
 import os
 import sys
-from uuid import uuid4
 
 # Add the backend directory to the path so we can import 'app'
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))

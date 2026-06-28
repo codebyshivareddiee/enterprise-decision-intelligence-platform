@@ -75,9 +75,24 @@ async def execute_decision(
     workspace_decision_context["preference_profile"] = {}
     workspace_decision_context["knowledge_schemas"] = []
 
+    import time
+
+    start_time = time.time()
+
     plan = await planner.generate_plan(
         user_request=request.user_request,
         workspace_decision_context=workspace_decision_context,
+    )
+
+    planner_duration = time.time() - start_time
+    import structlog
+
+    logger = structlog.get_logger(__name__)
+    logger.info(
+        "planner_execution_completed",
+        plan_generation_duration_ms=round(planner_duration * 1000, 2),
+        total_steps=len(plan.execution_steps),
+        requires_human_review=plan.requires_human_review,
     )
 
     # Initialize runtime
