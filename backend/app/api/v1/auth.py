@@ -3,8 +3,9 @@
 from fastapi import APIRouter, Depends, Request, status
 from fastapi.security import OAuth2PasswordRequestForm
 
-from app.auth.dependencies import get_auth_service, get_current_user
-from app.auth.models import User
+from app.api.dependencies import get_auth_service, get_audit_repository
+from app.auth.dependencies import require_authenticated_user
+from app.auth.models import User, AuditEvent
 from app.auth.schemas import (
     ChangePasswordRequest,
     LoginRequest,
@@ -14,19 +15,25 @@ from app.auth.schemas import (
     UserResponse,
 )
 from app.auth.service import AuthService
+from app.api.v1.models.response import StandardResponse
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
 
-@router.post("/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/register", response_model=StandardResponse[UserResponse], status_code=status.HTTP_201_CREATED)
 async def register(
     request_data: RegisterRequest,
     request: Request,
     auth_service: AuthService = Depends(get_auth_service),
-) -> UserResponse:
-    req_id = request.headers.get("X-Request-ID", "")
+) -> StandardResponse[UserResponse]:
+    req_id = getattr(request.state, "request_id", "")
     user = await auth_service.register(request_data, req_id=req_id)
-    return UserResponse.model_validate(user.model_dump())
+    return StandardResponse(
+        success=True,
+        data=UserResponse.model_validate(user.model_dump()),
+        message="User registered successfully.",
+        request_id=req_id,
+    )
 
 
 @router.post("/login", response_model=Token)
@@ -35,8 +42,9 @@ async def login(
     form_data: OAuth2PasswordRequestForm = Depends(),
     auth_service: AuthService = Depends(get_auth_service),
 ) -> Token:
-    req_id = request.headers.get("X-Request-ID", "")
-    # Map OAuth2PasswordRequestForm.username to email
+    # We do not wrap this in StandardResponse because OAuth2 expects a specific format
+    # for Swagger UI authorization to work correctly.
+    req_id = getattr(request.state, "request_id", "")
     login_req = LoginRequest(email=form_data.username, password=form_data.password)
     return await auth_service.login(login_req, req_id=req_id)
 
@@ -47,32 +55,59 @@ async def refresh(
     request: Request,
     auth_service: AuthService = Depends(get_auth_service),
 ) -> Token:
-    req_id = request.headers.get("X-Request-ID", "")
+    # Keep OAuth2 standard for refresh token response
+    req_id = getattr(request.state, "request_id", "")
     return await auth_service.refresh(request_data.refresh_token, req_id=req_id)
 
 
-@router.post("/logout")
-async def logout() -> dict[str, str]:
-    """Logout endpoint.
+@router.post("/logout", response_model=StandardResponse[dict])
+async def logout(
+    request: Request,
+    audit_repo = Depends(get_audit_repository)
+) -> StandardResponse[dict]:
+    """Logout endpoint."""
+    user_id_str = getattr(request.state, "user_id", None)
     
-    Since we use stateless JWTs, the client simply discards the token.
-    A full implementation could add the token to a Redis blocklist here.
-    """
-    return {"message": "Logged out successfully"}
+    await audit_repo.log_event(AuditEvent(
+        request_id=getattr(request.state, "request_id", ""),
+        user_id=user_id_str,
+        action="logout",
+        result="success"
+    ))
+    
+    return StandardResponse(
+        success=True,
+        data={},
+        message="Logged out successfully",
+        request_id=getattr(request.state, "request_id", ""),
+    )
 
 
-@router.get("/me", response_model=UserResponse)
-async def get_me(current_user: User = Depends(get_current_user)) -> UserResponse:
-    return UserResponse.model_validate(current_user.model_dump())
+@router.get("/me", response_model=StandardResponse[UserResponse])
+async def get_me(
+    request: Request,
+    current_user: User = Depends(require_authenticated_user())
+) -> StandardResponse[UserResponse]:
+    return StandardResponse(
+        success=True,
+        data=UserResponse.model_validate(current_user.model_dump()),
+        message="User profile retrieved.",
+        request_id=getattr(request.state, "request_id", ""),
+    )
 
 
-@router.post("/change-password")
+@router.post("/change-password", response_model=StandardResponse[dict])
 async def change_password(
     request_data: ChangePasswordRequest,
     request: Request,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_authenticated_user()),
     auth_service: AuthService = Depends(get_auth_service),
-) -> dict[str, str]:
-    req_id = request.headers.get("X-Request-ID", "")
+) -> StandardResponse[dict]:
+    req_id = getattr(request.state, "request_id", "")
     await auth_service.change_password(current_user.id, request_data, req_id=req_id)
-    return {"message": "Password changed successfully"}
+    return StandardResponse(
+        success=True,
+        data={},
+        message="Password changed successfully",
+        request_id=req_id,
+    )

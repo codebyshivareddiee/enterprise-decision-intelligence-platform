@@ -78,6 +78,34 @@ class Settings(BaseSettings):
             return [origin.strip() for origin in value.split(",")]
         return value  # type: ignore[return-value]
 
+    @field_validator("jwt_secret_key")
+    @classmethod
+    def validate_jwt_secret(cls, value: str) -> str:
+        if not value or value == "super-secret-jwt-key-change-me" or value == "change-me":
+            raise ValueError("A valid JWT Secret must be provided")
+        return value
+
+    @field_validator("mongodb_uri")
+    @classmethod
+    def validate_mongo_uri(cls, value: str) -> str:
+        if not value or not value.startswith("mongodb"):
+            raise ValueError("A valid MongoDB URI must be provided")
+        return value
+
+    @field_validator("qdrant_url")
+    @classmethod
+    def validate_qdrant_url(cls, value: str) -> str:
+        if not value or not value.startswith("http"):
+            raise ValueError("A valid Qdrant URL must be provided")
+        return value
+
+    @field_validator("openai_api_key")
+    @classmethod
+    def validate_openai_api_key(cls, value: str) -> str:
+        if not value:
+            raise ValueError("OpenAI API Key must be provided")
+        return value
+
 
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:

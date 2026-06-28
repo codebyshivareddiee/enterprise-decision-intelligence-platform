@@ -21,6 +21,7 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
     ) -> Response:
         """Process the request, bind context vars, and add tracking headers."""
         request_id = request.headers.get("X-Request-ID") or str(uuid.uuid4())
+        request.state.request_id = request_id
         # Extract from Headers initially (e.g. for request_id)
         organization_id = request.headers.get("X-Organization-ID", "unknown")
         workspace_id = request.headers.get("X-Workspace-ID", "unknown")

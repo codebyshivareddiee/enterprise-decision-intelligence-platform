@@ -25,12 +25,15 @@ class AuthService:
         self.audit_repo = audit_repo
 
     async def _log_audit(
-        self, action: str, result: str, user_id: str | None = None, req_id: str = ""
+        self, action: str, result: str, user_id: str | None = None, req_id: str = "",
+        organization_id: str | None = None, workspace_id: str | None = None
     ) -> None:
         """Log an audit event both to MongoDB and via structlog."""
         event = AuditEvent(
             request_id=req_id,
             user_id=user_id,
+            organization_id=organization_id,
+            workspace_id=workspace_id,
             action=action,
             result=result,
         )
@@ -42,6 +45,8 @@ class AuthService:
             result=result,
             user_id=user_id,
             request_id=req_id,
+            organization_id=organization_id,
+            workspace_id=workspace_id,
         )
 
     async def register(self, request: RegisterRequest, req_id: str = "") -> User:

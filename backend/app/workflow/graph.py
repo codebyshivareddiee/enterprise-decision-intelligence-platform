@@ -8,6 +8,9 @@ from langgraph.types import Send
 from app.agents.planner.schemas import FailureStrategy, WorkflowArtifact
 from app.workflow.context import ExecutionContext
 from app.workflow.models import WorkflowState
+import structlog
+
+logger = structlog.get_logger(__name__)
 
 
 class WorkflowGraphBuilder:
@@ -41,11 +44,11 @@ class WorkflowGraphBuilder:
                     import inspect
                     
                     start_time = time.time()
-                    print(f"\n[{step_to_wrap.step_id}] Started execution...")
+                    logger.info(f"[{step_to_wrap.step_id}] Started execution...")
                     
                     consumed_names = [a.value for a in consumes]
                     if consumed_names:
-                        print(f"[{step_to_wrap.step_id}] Consuming artifacts: {consumed_names}")
+                        logger.debug(f"[{step_to_wrap.step_id}] Consuming artifacts: {consumed_names}")
                     
                     updates: dict[str, Any] = {}
 
@@ -54,7 +57,7 @@ class WorkflowGraphBuilder:
                         field_name = artifact.value.lower()
                         if getattr(state, field_name, None) is None:
                             error_msg = f"Missing artifact {artifact.value} for step {step_to_wrap.step_id}"
-                            print(f"[{step_to_wrap.step_id}] ERROR: {error_msg}")
+                            logger.error(f"[{step_to_wrap.step_id}] ERROR: {error_msg}")
                             if step_to_wrap.failure_strategy == FailureStrategy.FAIL_PLAN:
                                 return {
                                     "failed_steps": [step_to_wrap.step_id],
@@ -82,7 +85,7 @@ class WorkflowGraphBuilder:
                         # Validate produces
                         produced_names = [a.value for a in produces]
                         if produced_names:
-                            print(f"[{step_to_wrap.step_id}] Expected to produce: {produced_names}")
+                            logger.debug(f"[{step_to_wrap.step_id}] Expected to produce: {produced_names}")
                             
                         for artifact in produces:
                             field_name = artifact.value.lower()
@@ -93,20 +96,20 @@ class WorkflowGraphBuilder:
                         updates["completed_steps"] = [step_to_wrap.step_id]
                         
                         execution_time = time.time() - start_time
-                        print(f"[{step_to_wrap.step_id}] Success in {execution_time:.2f}s")
+                        logger.info(f"[{step_to_wrap.step_id}] Success in {execution_time:.2f}s")
                         
                         available_artifacts = [
                             art.value for art in WorkflowArtifact 
                             if getattr(state, art.value.lower(), None) is not None or art.value.lower() in updates
                         ]
-                        print(f"[{step_to_wrap.step_id}] WorkflowState now contains: {available_artifacts}")
+                        logger.debug(f"[{step_to_wrap.step_id}] WorkflowState now contains: {available_artifacts}")
                         
                         return updates
 
                     except Exception as e:
                         execution_time = time.time() - start_time
                         error_msg = f"Step {step_to_wrap.step_id} failed: {str(e)}"
-                        print(f"[{step_to_wrap.step_id}] Failed in {execution_time:.2f}s: {error_msg}")
+                        logger.error(f"[{step_to_wrap.step_id}] Failed in {execution_time:.2f}s: {error_msg}")
                         
                         error_updates: dict[str, Any] = {
                             "failed_steps": [step_to_wrap.step_id],

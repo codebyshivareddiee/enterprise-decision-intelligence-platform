@@ -47,6 +47,7 @@ class AuditEvent(BaseModel):
     request_id: str
     user_id: Optional[str] = None
     organization_id: Optional[str] = None
+    workspace_id: Optional[str] = None
     action: str
     result: str
     ip_address: Optional[str] = None

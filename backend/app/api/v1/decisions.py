@@ -4,7 +4,7 @@ from typing import Any
 from uuid import UUID
 import uuid
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 
 from langgraph.checkpoint.memory import MemorySaver
 
@@ -14,13 +14,16 @@ from app.api.dependencies import (
     get_decision_history_repository,
     get_planner,
     get_workspace_repository,
+    get_audit_repository,
 )
+from app.auth.models import AuditEvent
 from app.api.v1.models.requests import (
     DecisionOutcomeRequest,
     WorkflowExecuteRequest,
     WorkflowResumeRequest,
 )
 from app.api.v1.models.responses import WorkflowExecuteResponse, WorkflowStatusResponse
+from app.api.v1.models.response import StandardResponse
 from app.core.exceptions import EntityNotFound
 from app.models.decision_history import DecisionHistory
 from app.models.enums import DecisionOutcome
@@ -30,13 +33,13 @@ from app.workflow.context import ExecutionContext, RuntimeConfig
 from app.workflow.models import WorkflowState
 from app.workflow.registry import AgentRegistry
 from app.workflow.runtime import WorkflowRuntime
-from app.auth.dependencies import get_current_user, require_permission
-from app.auth.permissions import Permission
+from app.auth.dependencies import require_authenticated_user, require_role
+from app.auth.models import Role
 
 router = APIRouter(
     prefix="/decisions", 
     tags=["Decisions"],
-    dependencies=[Depends(get_current_user)]
+    dependencies=[Depends(require_authenticated_user())]
 )
 
 # For demonstration, we keep a global MemorySaver instance.
@@ -46,15 +49,17 @@ _checkpointer = MemorySaver()
 
 @router.post(
     "/execute",
-    response_model=WorkflowExecuteResponse,
+    response_model=StandardResponse[WorkflowExecuteResponse],
     summary="Execute a decision workflow",
-    dependencies=[Depends(require_permission(Permission.EXECUTE_WORKFLOWS))],
+    dependencies=[Depends(require_role(Role.WORKSPACE_ADMIN))],
 )
 async def execute_decision(
     request: WorkflowExecuteRequest,
+    req: Request,
     planner: Planner = Depends(get_planner),
     workspace_repo: WorkspaceRepository = Depends(get_workspace_repository),
-) -> WorkflowExecuteResponse:
+    audit_repo = Depends(get_audit_repository),
+) -> StandardResponse[WorkflowExecuteResponse]:
     """Invoke the planner and start the LangGraph workflow runtime."""
     workspace = await workspace_repo.get_by_id(request.workspace_id)
     if not workspace:
@@ -97,7 +102,7 @@ async def execute_decision(
         thread_id=str(decision_id)
     )
     
-    return WorkflowExecuteResponse(
+    exec_resp = WorkflowExecuteResponse(
         decision_id=decision_id,
         execution_plan=plan.dict(),
         execution_status="COMPLETED" if not final_state.is_interrupted else "INTERRUPTED",
@@ -106,19 +111,37 @@ async def execute_decision(
         explanation=None,
         execution_trace=[{"step": step.name} for step in final_state.completed_steps],
     )
+    
+    await audit_repo.log_event(AuditEvent(
+        request_id=getattr(req.state, "request_id", ""),
+        user_id=getattr(req.state, "user_id", None),
+        organization_id=str(workspace.organization_id),
+        workspace_id=str(workspace.id),
+        action="execute_decision",
+        result="success"
+    ))
+
+    return StandardResponse(
+        success=True,
+        data=exec_resp,
+        message="Workflow execution started.",
+        request_id=getattr(req.state, "request_id", ""),
+    )
 
 
 @router.post(
     "/{decision_id}/resume",
-    response_model=WorkflowStatusResponse,
+    response_model=StandardResponse[WorkflowStatusResponse],
     summary="Resume a paused workflow",
-    dependencies=[Depends(require_permission(Permission.RESUME_WORKFLOWS))],
+    dependencies=[Depends(require_role(Role.DECISION_REVIEWER))],
 )
 async def resume_decision(
     decision_id: UUID,
     request: WorkflowResumeRequest,
+    req: Request,
     planner: Planner = Depends(get_planner),
-) -> WorkflowStatusResponse:
+    audit_repo = Depends(get_audit_repository),
+) -> StandardResponse[WorkflowStatusResponse]:
     """Resumes a workflow that was paused for human review."""
     
     # Reconstruct context (in reality, we'd hydrate from DB/checkpoint)
@@ -139,7 +162,7 @@ async def resume_decision(
         feedback=request.feedback
     )
     
-    return WorkflowStatusResponse(
+    status_resp = WorkflowStatusResponse(
         decision_id=decision_id,
         status="COMPLETED" if not final_state.is_interrupted else "INTERRUPTED",
         current_state=final_state.dict(exclude={"plan", "artifacts"}),
@@ -148,18 +171,34 @@ async def resume_decision(
         current_node=None,
         execution_trace=[],
     )
+    
+    await audit_repo.log_event(AuditEvent(
+        request_id=getattr(req.state, "request_id", ""),
+        user_id=getattr(req.state, "user_id", None),
+        action="resume_decision",
+        result="success"
+    ))
+
+    return StandardResponse(
+        success=True,
+        data=status_resp,
+        message="Workflow resumed successfully.",
+        request_id=getattr(req.state, "request_id", ""),
+    )
 
 
 @router.post(
     "/outcome",
-    response_model=DecisionHistory,
+    response_model=StandardResponse[DecisionHistory],
     summary="Record a decision outcome",
-    dependencies=[Depends(require_permission(Permission.RECORD_OUTCOMES))],
+    dependencies=[Depends(require_role(Role.DECISION_REVIEWER))],
 )
 async def record_outcome(
     request: DecisionOutcomeRequest,
+    req: Request,
     repo: DecisionHistoryRepository = Depends(get_decision_history_repository),
-) -> DecisionHistory:
+    audit_repo = Depends(get_audit_repository),
+) -> StandardResponse[DecisionHistory]:
     """Record a final human decision for a given execution."""
     
     decision = DecisionHistory(
@@ -173,4 +212,18 @@ async def record_outcome(
         notes=request.feedback,
     )
     
-    return await repo.create(decision)
+    created = await repo.create(decision)
+    
+    await audit_repo.log_event(AuditEvent(
+        request_id=getattr(req.state, "request_id", ""),
+        user_id=getattr(req.state, "user_id", None),
+        action="record_decision_outcome",
+        result="success"
+    ))
+
+    return StandardResponse(
+        success=True,
+        data=created,
+        message="Decision outcome recorded successfully.",
+        request_id=getattr(req.state, "request_id", ""),
+    )

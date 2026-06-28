@@ -13,6 +13,8 @@ from app.core.logging import configure_logging
 logger = structlog.get_logger(__name__)
 
 
+from app.core.container import ServiceContainer
+
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:  # noqa: ARG001
     """Manage application startup and shutdown lifecycle."""
@@ -26,9 +28,13 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:  # noqa: ARG001
         port=settings.app_port,
     )
 
+    container = ServiceContainer(settings)
+    app.state.container = container
+
     yield
 
     logger.info("application.shutdown")
+    await container.close()
 
 
 def create_app() -> FastAPI:

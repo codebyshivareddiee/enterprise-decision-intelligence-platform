@@ -1,7 +1,10 @@
 """AI-based document analyzer."""
 
 import json
+import structlog
 from openai import AsyncOpenAI
+
+logger = structlog.get_logger(__name__)
 from app.knowledge.analyzer.base import DocumentAnalyzer
 from app.knowledge.analyzer.models import DocumentAnalysisResult, ChunkProfile
 from app.models.knowledge_asset import KnowledgeAsset
@@ -106,5 +109,5 @@ class AIDocumentAnalyzer(DocumentAnalyzer):
             )
         except Exception as e:
             # Fallback gracefully
-            print(f"[AIDocumentAnalyzer] Failed to analyze document: {e}")
+            logger.error("ai_document_analyzer.failed", error=str(e))
             return None
