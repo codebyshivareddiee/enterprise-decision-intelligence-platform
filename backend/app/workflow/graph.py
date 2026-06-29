@@ -62,7 +62,32 @@ class WorkflowGraphBuilder:
                                 return {
                                     "failed_steps": [step_to_wrap.step_id],
                                     "errors": [error_msg],
-                                }
+                                 }
+
+                    # Update step status in DB to running
+                    decision_id_str = getattr(state, "decision_id", None)
+                    if decision_id_str:
+                        try:
+                            from app.persistence.mongodb.client import get_mongo_client
+                            from app.config.settings import get_settings
+                            from app.persistence.mongodb.repositories.recommendation_repository import RecommendationRepository
+                            from uuid import UUID
+
+                            db_client = get_mongo_client()
+                            settings = get_settings()
+                            db = db_client[settings.mongodb_db_name]
+                            rec_repo = RecommendationRepository(db)
+                            rec = await rec_repo.get_by_id(UUID(decision_id_str))
+                            if rec:
+                                updated_plan = []
+                                for step_dict in rec.plan_snapshot:
+                                    if step_dict.get("step_id") == step_to_wrap.step_id:
+                                        step_dict["status"] = "running"
+                                    updated_plan.append(step_dict)
+                                rec.plan_snapshot = updated_plan
+                                await rec_repo.update(rec)
+                        except Exception as db_err:
+                            logger.error(f"Failed to update step running status in DB: {db_err}")
 
                     try:
                         # Invoke the actual implementation (async or sync)
@@ -97,6 +122,31 @@ class WorkflowGraphBuilder:
                         
                         execution_time = time.time() - start_time
                         logger.info(f"[{step_to_wrap.step_id}] Success in {execution_time:.2f}s")
+
+                        # Update step status in DB to completed
+                        if decision_id_str:
+                            try:
+                                from app.persistence.mongodb.client import get_mongo_client
+                                from app.config.settings import get_settings
+                                from app.persistence.mongodb.repositories.recommendation_repository import RecommendationRepository
+                                from uuid import UUID
+
+                                db_client = get_mongo_client()
+                                settings = get_settings()
+                                db = db_client[settings.mongodb_db_name]
+                                rec_repo = RecommendationRepository(db)
+                                rec = await rec_repo.get_by_id(UUID(decision_id_str))
+                                if rec:
+                                    updated_plan = []
+                                    for step_dict in rec.plan_snapshot:
+                                        if step_dict.get("step_id") == step_to_wrap.step_id:
+                                            step_dict["status"] = "completed"
+                                            step_dict["time"] = f"{execution_time:.2f}s"
+                                        updated_plan.append(step_dict)
+                                    rec.plan_snapshot = updated_plan
+                                    await rec_repo.update(rec)
+                            except Exception as db_err:
+                                logger.error(f"Failed to update step completed status in DB: {db_err}")
                         
                         available_artifacts = [
                             art.value for art in WorkflowArtifact 

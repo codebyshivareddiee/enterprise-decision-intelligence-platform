@@ -15,7 +15,10 @@ class AIDocumentAnalyzer(DocumentAnalyzer):
     """Uses LLM to analyze document and select optimal processing strategy."""
 
     def __init__(self, client: AsyncOpenAI | None = None, model: str = "gpt-4o-mini") -> None:
-        self.client = client or AsyncOpenAI()
+        from app.config.settings import get_settings
+        settings = get_settings()
+        api_key = settings.openai_api_key or "sk-placeholder-key-for-bootstrap"
+        self.client = client or AsyncOpenAI(api_key=api_key)
         self.model = model
 
     async def analyze(

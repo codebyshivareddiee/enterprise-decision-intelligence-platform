@@ -30,7 +30,7 @@ logger = structlog.get_logger(__name__)
 class OpenAIProvider(LLMProvider):
     def __init__(self) -> None:
         settings = get_settings()
-        self.api_key = settings.openai_api_key
+        self.api_key = settings.openai_api_key or "sk-placeholder-key-for-bootstrap"
         self.chat_model = settings.openai_chat_model
         self.embedding_model = settings.openai_embedding_model
         self.client = AsyncOpenAI(api_key=self.api_key)

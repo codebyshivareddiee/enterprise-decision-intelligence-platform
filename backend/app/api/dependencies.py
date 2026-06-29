@@ -16,6 +16,7 @@ from app.persistence.mongodb.repositories.decision_history_repository import Dec
 from app.persistence.mongodb.repositories.business_rule_repository import BusinessRuleRepository
 from app.persistence.mongodb.repositories.audit_repository import AuditRepository
 from app.persistence.mongodb.repositories.user_repository import UserRepository
+from app.persistence.mongodb.repositories.recommendation_repository import RecommendationRepository
 
 # AI Layer
 from app.ai.manager import AIManager
@@ -115,6 +116,13 @@ def get_auth_service(
 ) -> AuthService:
     """Return the AuthService."""
     return container.auth_service
+
+
+def get_recommendation_repository(
+    container: ServiceContainer = Depends(get_container),
+) -> RecommendationRepository:
+    """Return the RecommendationRepository."""
+    return container.recommendation_repo
 
 
 def get_request_context(request: Request) -> dict[str, str]:

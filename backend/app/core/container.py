@@ -11,6 +11,7 @@ from app.persistence.mongodb.repositories.decision_history_repository import Dec
 from app.persistence.mongodb.repositories.business_rule_repository import BusinessRuleRepository
 from app.persistence.mongodb.repositories.audit_repository import AuditRepository
 from app.persistence.mongodb.repositories.user_repository import UserRepository
+from app.persistence.mongodb.repositories.recommendation_repository import RecommendationRepository
 
 from app.ai.manager import AIManager
 from app.ai.providers.openai_provider import OpenAIProvider
@@ -47,6 +48,7 @@ class ServiceContainer:
         self.business_rule_repo = BusinessRuleRepository(self.db)
         self.audit_repo = AuditRepository(self.db)
         self.user_repo = UserRepository(self.db)
+        self.recommendation_repo = RecommendationRepository(self.db)
         
         # AI
         self.ai_provider = OpenAIProvider()

@@ -43,6 +43,11 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
                 if role_list:
                     roles = ",".join(role_list)
 
+        # Set variables in request state context
+        request.state.user_id = user_id
+        request.state.organization_id = organization_id.split(",")[0] if "," in organization_id else organization_id
+        request.state.workspace_id = workspace_id
+
         # Bind to structlog context vars
         structlog.contextvars.bind_contextvars(
             request_id=request_id,

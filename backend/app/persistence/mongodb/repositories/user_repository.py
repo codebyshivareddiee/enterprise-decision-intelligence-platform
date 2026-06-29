@@ -44,6 +44,19 @@ class UserRepository:
             return None
         return user
 
+    async def list(
+        self,
+        *,
+        organization_id: UUID | None = None,
+        skip: int = 0,
+        limit: int = 100,
+    ) -> list[User]:
+        query = {}
+        if organization_id:
+            query["organization_ids"] = str(organization_id)
+        cursor = self._collection.find(query).skip(skip).limit(limit)
+        return [user_mapper.to_domain(doc) async for doc in cursor]
+
     async def delete(self, user_id: UUID) -> bool:
         result = await self._collection.delete_one({"_id": str(user_id)})
         return result.deleted_count > 0

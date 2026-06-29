@@ -23,6 +23,10 @@ class WorkflowState(BaseModel):
     parallel nodes return updates, the items are appended rather than overwritten.
     """
 
+    decision_id: str | None = Field(
+        default=None, description="The unique execution decision ID"
+    )
+
     # Context
     organization: dict[str, Any] | None = Field(
         default=None, description="Organization context"

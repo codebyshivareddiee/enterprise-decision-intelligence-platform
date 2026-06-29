@@ -143,7 +143,7 @@ def create_test_plan(
     )
 
 
-def test_normal_execution():
+async def test_normal_execution():
     print("\n=== TEST 1: Normal Execution & Parallel Branches ===")
     registry = setup_mock_registry()
     plan = create_test_plan(requires_review=False)
@@ -154,7 +154,7 @@ def test_normal_execution():
     runtime = WorkflowRuntime(context)
     initial_state = WorkflowState(user_request="Find best candidate")
 
-    final_state = runtime.start(initial_state, thread_id="test1")
+    final_state = await runtime.start(initial_state, thread_id="test1")
 
     assert "step_retrieve" in final_state.completed_steps
     assert "step_recommend" in final_state.completed_steps
@@ -165,7 +165,7 @@ def test_normal_execution():
     print("Test 1 Passed!")
 
 
-def test_missing_artifact():
+async def test_missing_artifact():
     print("\n=== TEST 2: Missing Artifact Validation ===")
     registry = setup_mock_registry()
     plan = create_test_plan(requires_review=False)
@@ -177,7 +177,7 @@ def test_missing_artifact():
     # Don't provide user_request, which is required by Retriever
     initial_state = WorkflowState()
 
-    final_state = runtime.start(initial_state, thread_id="test2")
+    final_state = await runtime.start(initial_state, thread_id="test2")
 
     assert "step_retrieve" in final_state.failed_steps
     assert len(final_state.errors) > 0
@@ -185,7 +185,7 @@ def test_missing_artifact():
     print("Test 2 Passed!")
 
 
-def test_interrupt_resume():
+async def test_interrupt_resume():
     print("\n=== TEST 3: Interrupt & Resume ===")
     registry = setup_mock_registry()
     plan = create_test_plan(requires_review=True)
@@ -196,20 +196,20 @@ def test_interrupt_resume():
     runtime = WorkflowRuntime(context)
     initial_state = WorkflowState(user_request="Find best candidate")
 
-    state = runtime.start(initial_state, thread_id="test3")
+    state = await runtime.start(initial_state, thread_id="test3")
 
     assert state.is_interrupted is True
     print("Workflow interrupted for human review.")
 
     # Now resume
-    state = runtime.resume(thread_id="test3", feedback={"decision": "Approved!"})
+    state = await runtime.resume(thread_id="test3", feedback={"decision": "Approved!"})
 
     assert state.is_interrupted is False
     assert state.human_feedback == {"decision": "Approved!"}
     print("Test 3 Passed!")
 
 
-def test_replanning():
+async def test_replanning():
     print("\n=== TEST 4: Replanning Trigger ===")
     registry = setup_mock_registry()
 
@@ -234,7 +234,7 @@ def test_replanning():
     runtime = WorkflowRuntime(context)
     initial_state = WorkflowState(user_request="Find best candidate")
 
-    final_state = runtime.start(initial_state, thread_id="test4")
+    final_state = await runtime.start(initial_state, thread_id="test4")
 
     assert "step_reason" in final_state.failed_steps
     assert final_state.requires_replanning is True
@@ -242,9 +242,14 @@ def test_replanning():
     print("Test 4 Passed!")
 
 
-if __name__ == "__main__":
-    test_normal_execution()
-    test_missing_artifact()
-    test_interrupt_resume()
-    test_replanning()
+async def main():
+    await test_normal_execution()
+    await test_missing_artifact()
+    await test_interrupt_resume()
+    await test_replanning()
     print("\nAll tests passed successfully! The Runtime is fully functional.")
+
+
+if __name__ == "__main__":
+    import asyncio
+    asyncio.run(main())
