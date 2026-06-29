@@ -38,7 +38,6 @@ uv.lock
 # ── Secrets / Environment Variables ─────────────────────────────────────────
 .env
 *.env
-!.env.example
 
 # ── Testing ──────────────────────────────────────────────────────────────────
 .pytest_cache/
@@ -79,5 +78,5 @@ logs/
 *.bak
 *.tmp
 *.orig
-# ── Frontend Specific ────────────────────────────────────────────────────────
-frontend/node_modules/
+
+submission.md
