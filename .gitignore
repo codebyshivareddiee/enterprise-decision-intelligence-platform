@@ -79,3 +79,5 @@ logs/
 *.bak
 *.tmp
 *.orig
+# ── Frontend Specific ────────────────────────────────────────────────────────
+frontend/node_modules/
