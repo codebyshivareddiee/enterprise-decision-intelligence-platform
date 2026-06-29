@@ -24,5 +24,9 @@ class WorkspaceDocument(TypedDict):
     owner_id: str
     selected_knowledge_asset_ids: list[str]  # UUID strings of selected assets
     qdrant_collection_name: str | None
+    goal: str | None
+    success_metrics: str | None
+    decision_points: str | None
+    workspace_summary: dict[str, object] | None
     created_at: datetime
     updated_at: datetime

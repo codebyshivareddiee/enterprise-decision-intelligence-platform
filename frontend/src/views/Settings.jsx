@@ -1,17 +1,30 @@
 import React, { useState, useEffect } from 'react';
-import { Shield, PlusCircle, AlertCircle, Trash2, Key, Users, Settings as SettingsIcon } from 'lucide-react';
+import { PlusCircle, Trash2 } from 'lucide-react';
 import { api } from '../services/api';
 import { toast } from 'sonner';
 
-export default function Settings({ workspace, user }) {
-  const [activePane, setActivePane] = useState('profile');
+export default function Settings({ workspace, user, setWorkspaces }) {
+  const [activePane, setActivePane] = useState('workspace');
   const [rules, setRules] = useState([]);
   const [loading, setLoading] = useState(false);
 
-  // Profile fields
-  const [fullName, setFullName] = useState(user?.full_name || '');
-  const [oldPassword, setOldPassword] = useState('');
-  const [newPassword, setNewPassword] = useState('');
+  // Workspace fields
+  const [wsName, setWsName] = useState('');
+  const [wsDesc, setWsDesc] = useState('');
+  const [wsGoal, setWsGoal] = useState('');
+  const [wsSuccessMetrics, setWsSuccessMetrics] = useState('');
+  const [wsDecisionPoints, setWsDecisionPoints] = useState('');
+  const [isSavingWs, setIsSavingWs] = useState(false);
+
+  useEffect(() => {
+    if (workspace) {
+      setWsName(workspace.name || '');
+      setWsDesc(workspace.description || '');
+      setWsGoal(workspace.goal || '');
+      setWsSuccessMetrics(workspace.success_metrics || '');
+      setWsDecisionPoints(workspace.decision_points || '');
+    }
+  }, [workspace]);
 
   // Rules fields
   const [ruleName, setRuleName] = useState('');
@@ -36,14 +49,27 @@ export default function Settings({ workspace, user }) {
     setLoading(false);
   };
 
-  const handleUpdatePassword = async (e) => {
+  const handleUpdateWorkspace = async (e) => {
     e.preventDefault();
-    if (!oldPassword || !newPassword) return;
-    
-    // Simulate change password
-    toast.success('Password updated successfully!');
-    setOldPassword('');
-    setNewPassword('');
+    setIsSavingWs(true);
+    try {
+      const payload = {
+        ...workspace,
+        name: wsName,
+        description: wsDesc,
+        goal: wsGoal,
+        success_metrics: wsSuccessMetrics,
+        decision_points: wsDecisionPoints
+      };
+      const updated = await api.updateWorkspace(workspace.id, payload);
+      if (setWorkspaces) {
+        setWorkspaces(prev => prev.map(w => w.id === updated.id ? updated : w));
+      }
+      toast.success('Workspace updated successfully!');
+    } catch (err) {
+      toast.error('Failed to update workspace.');
+    }
+    setIsSavingWs(false);
   };
 
   const handleAddRule = async (e) => {
@@ -68,6 +94,16 @@ export default function Settings({ workspace, user }) {
     }
   };
 
+  const handleDeleteRule = async (ruleId) => {
+    try {
+      await api.deleteRule(workspace.id, ruleId);
+      toast.success('Rule deleted successfully!');
+      loadRules();
+    } catch (err) {
+      toast.error('Failed to delete rule.');
+    }
+  };
+
   return (
     <div className="full-page-scroll">
       <div className="org-hub-welcome">
@@ -78,56 +114,16 @@ export default function Settings({ workspace, user }) {
       <div className="settings-container">
         {/* Left tabs */}
         <div className="settings-nav">
-          <button className={`settings-nav-btn ${activePane === 'profile' ? 'active' : ''}`} onClick={() => setActivePane('profile')}>
-            User Profile
+          <button className={`settings-nav-btn ${activePane === 'workspace' ? 'active' : ''}`} onClick={() => setActivePane('workspace')}>
+            Workspace Details
           </button>
           <button className={`settings-nav-btn ${activePane === 'rules' ? 'active' : ''}`} onClick={() => setActivePane('rules')}>
             Workspace Rules
-          </button>
-          <button className={`settings-nav-btn ${activePane === 'org' ? 'active' : ''}`} onClick={() => setActivePane('org')}>
-            Organization Info
           </button>
         </div>
 
         {/* Right pane content */}
         <div className="settings-pane">
-          {activePane === 'profile' && (
-            <div>
-              <h2>User Profile</h2>
-              <p className="subtitle">Update your profile parameters and security credentials.</p>
-
-              <form onSubmit={handleUpdatePassword} className="settings-form">
-                <div className="form-group">
-                  <label>Full Name</label>
-                  <input type="text" value={fullName} onChange={e => setFullName(e.target.value)} required />
-                </div>
-                <div className="form-group">
-                  <label>Email Address (Disabled)</label>
-                  <input type="email" value={user?.email || ''} disabled style={{ backgroundColor: 'var(--bg-main)', cursor: 'not-allowed' }} />
-                </div>
-
-                <div style={{ margin: '16px 0', borderTop: '1px solid var(--border)' }}></div>
-
-                <h3 style={{ fontSize: '15px', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
-                  <Key size={16} /> Change Password
-                </h3>
-
-                <div className="form-group">
-                  <label>Old Password</label>
-                  <input type="password" placeholder="Enter old password" value={oldPassword} onChange={e => setOldPassword(e.target.value)} />
-                </div>
-                <div className="form-group">
-                  <label>New Password</label>
-                  <input type="password" placeholder="Enter new password" value={newPassword} onChange={e => setNewPassword(e.target.value)} />
-                </div>
-
-                <button type="submit" className="btn btn-primary" style={{ width: 'fit-content', marginTop: '12px' }}>
-                  Save Profile Settings
-                </button>
-              </form>
-            </div>
-          )}
-
           {activePane === 'rules' && (
             <div>
               <h2>Workspace Rules</h2>
@@ -142,13 +138,13 @@ export default function Settings({ workspace, user }) {
                       <div key={rule.id} className="rule-manager-card">
                         <div className="rule-manager-left">
                           <h4>{rule.name}</h4>
-                          <p className="details">{rule.details}</p>
+                          <p className="details">{rule.description}</p>
                         </div>
                         <div className="rule-manager-right">
                           <span className="workspace-status-badge active" style={{ fontSize: '10px' }}>
                             Priority {rule.priority}
                           </span>
-                          <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)' }} onClick={() => alert('Rule deletion is mocked.')}>
+                          <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)' }} onClick={() => handleDeleteRule(rule.id)}>
                             <Trash2 size={16} />
                           </button>
                         </div>
@@ -197,50 +193,42 @@ export default function Settings({ workspace, user }) {
             </div>
           )}
 
-          {activePane === 'org' && (
+          {activePane === 'workspace' && (
             <div>
-              <h2>Organization Info</h2>
-              <p className="subtitle">System details regarding your tenant isolation configuration.</p>
+              <h2>Workspace Details</h2>
+              <p className="subtitle">Update the core details, goal, success metrics, and decision points for this workspace.</p>
 
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', maxWidth: '520px' }}>
-                <div style={{ padding: '16px', border: '1px solid var(--border)', borderRadius: '6px', backgroundColor: 'var(--bg-main)' }}>
-                  <strong style={{ fontSize: '13px', display: 'block', marginBottom: '4px' }}>Acme Corporation</strong>
-                  <p style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Tenant Domain Isolation: <code>acme.com</code></p>
-                  <p style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Organization ID: <code>{user?.organization_ids?.[0] || 'Unknown'}</code></p>
+              <form onSubmit={handleUpdateWorkspace} className="settings-form">
+                <div className="form-group">
+                  <label>Workspace Name</label>
+                  <input type="text" value={wsName} onChange={e => setWsName(e.target.value)} placeholder="e.g. Sales Optimization Operations" required />
+                </div>
+                <div className="form-group">
+                  <label>Description</label>
+                  <textarea 
+                    value={wsDesc} 
+                    onChange={e => setWsDesc(e.target.value)} 
+                    placeholder="Describe the workspace purpose..." 
+                    style={{ padding: '10px 14px', border: '1px solid var(--border)', borderRadius: '6px', width: '100%', height: '80px', resize: 'none', outline: 'none' }}
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Goal</label>
+                  <input type="text" value={wsGoal} onChange={e => setWsGoal(e.target.value)} placeholder="e.g. Select the best CRM" />
+                </div>
+                <div className="form-group">
+                  <label>Success Metrics</label>
+                  <input type="text" value={wsSuccessMetrics} onChange={e => setWsSuccessMetrics(e.target.value)} placeholder="e.g. High user adoption, under budget" />
+                </div>
+                <div className="form-group">
+                  <label>Decision Points</label>
+                  <input type="text" value={wsDecisionPoints} onChange={e => setWsDecisionPoints(e.target.value)} placeholder="e.g. Cost, Integration, Support" />
                 </div>
 
-                <div>
-                  <h3 style={{ fontSize: '14px', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
-                    <Users size={16} /> User Memberships
-                  </h3>
-                  <table className="app-table" style={{ fontSize: '12.5px' }}>
-                    <thead>
-                      <tr>
-                        <th>User</th>
-                        <th>Global Role</th>
-                        <th>Status</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      <tr>
-                        <td style={{ fontWeight: 600, color: 'var(--text-main)' }}>Alex Johnson (You)</td>
-                        <td>ORGANIZATION_ADMIN</td>
-                        <td><span className="workspace-status-badge active">Active</span></td>
-                      </tr>
-                      <tr>
-                        <td style={{ fontWeight: 600, color: 'var(--text-main)' }}>Priya S.</td>
-                        <td>DECISION_REVIEWER</td>
-                        <td><span className="workspace-status-badge active">Active</span></td>
-                      </tr>
-                      <tr>
-                        <td style={{ fontWeight: 600, color: 'var(--text-main)' }}>Michael T.</td>
-                        <td>KNOWLEDGE_MANAGER</td>
-                        <td><span className="workspace-status-badge active">Active</span></td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
-              </div>
+                <button type="submit" className="btn btn-primary" style={{ width: 'fit-content', marginTop: '12px' }} disabled={isSavingWs}>
+                  {isSavingWs ? 'Saving...' : 'Save Workspace Details'}
+                </button>
+              </form>
             </div>
           )}
         </div>

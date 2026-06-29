@@ -103,3 +103,20 @@ class WorkspaceResponse(BaseModel):
     success_metrics: str | None
     decision_points: str | None
     workspace_summary: dict[str, object] | None
+
+
+class BusinessRuleResponse(BaseModel):
+    """Response payload representing a BusinessRule."""
+
+    id: UUID
+    created_at: Any
+    updated_at: Any
+    organization_id: UUID
+    workspace_id: UUID
+    name: str
+    description: str | None
+    rule_type: str
+    conditions: list[dict[str, Any]]
+    is_active: bool
+    weight: float
+    priority: int

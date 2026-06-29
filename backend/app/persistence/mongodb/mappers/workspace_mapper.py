@@ -27,6 +27,10 @@ def to_document(workspace: Workspace) -> WorkspaceDocument:
             str(aid) for aid in workspace.selected_knowledge_asset_ids
         ],
         qdrant_collection_name=workspace.qdrant_collection_name,
+        goal=workspace.goal,
+        success_metrics=workspace.success_metrics,
+        decision_points=workspace.decision_points,
+        workspace_summary=workspace.workspace_summary,
         created_at=workspace.created_at,
         updated_at=workspace.updated_at,
     )
@@ -49,7 +53,11 @@ def to_domain(doc: WorkspaceDocument) -> Workspace:
         selected_knowledge_asset_ids=[
             UUID(aid) for aid in doc["selected_knowledge_asset_ids"]
         ],
-        qdrant_collection_name=doc["qdrant_collection_name"],
+        qdrant_collection_name=doc.get("qdrant_collection_name"),
+        goal=doc.get("goal"),
+        success_metrics=doc.get("success_metrics"),
+        decision_points=doc.get("decision_points"),
+        workspace_summary=doc.get("workspace_summary"),
         created_at=doc["created_at"],
         updated_at=doc["updated_at"],
     )

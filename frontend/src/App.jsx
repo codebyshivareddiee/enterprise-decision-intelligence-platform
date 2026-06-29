@@ -129,9 +129,9 @@ function HistoryWrapper() {
 }
 
 function SettingsWrapper() {
-  const { activeWorkspace, user } = useOutletContext();
+  const { activeWorkspace, user, setWorkspaces } = useOutletContext();
   if (!activeWorkspace) return null;
-  return <Settings workspace={activeWorkspace} user={user} />;
+  return <Settings workspace={activeWorkspace} user={user} setWorkspaces={setWorkspaces} />;
 }
 
 function LoaderSpinner({ size = 24 }) {

@@ -4,6 +4,9 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field
 
+from app.models.enums import RuleType
+from app.models.business_rule import RuleCondition
+
 
 class WorkflowExecuteRequest(BaseModel):
     """Request payload for executing a decision workflow."""
@@ -83,3 +86,23 @@ class WorkspaceKnowledgeAttachRequest(BaseModel):
         ...,
         description="List of Organization Knowledge Asset IDs to attach to the workspace."
     )
+
+
+class BusinessRuleCreateRequest(BaseModel):
+    """Request payload for creating a business rule."""
+
+    name: str = Field(
+        ..., min_length=1, max_length=200, description="Human-readable rule name."
+    )
+    description: str | None = Field(
+        default=None, max_length=2000, description="Rule description/details."
+    )
+    rule_type: RuleType = Field(
+        default=RuleType.HARD_FILTER, description="Classification of the rule."
+    )
+    conditions: list[RuleCondition] = Field(
+        default_factory=list, description="Conditions for the rule."
+    )
+    is_active: bool = Field(default=True, description="Whether rule is enforced.")
+    weight: float = Field(default=1.0, description="Influence weight.")
+    priority: int = Field(default=100, description="Evaluation order.")

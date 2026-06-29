@@ -89,12 +89,6 @@ axiosInstance.interceptors.response.use(
   }
 );
 
-// High-fidelity fallback mock data for endpoints intentionally kept static
-const MOCK_RULES = [
-  { id: 'rule-1', name: 'Budget Constraint', status: 'active' },
-  { id: 'rule-2', name: 'ISO 27001 Compliance', status: 'active' }
-];
-
 export const api = {
   // Authentication
   async register(email, password, full_name, company_name = '') {
@@ -246,14 +240,27 @@ export const api = {
     return response.data.data;
   },
 
-  // Rules (Static for Hackathon)
+  // Rules
   async getRules(workspaceId) {
-    return MOCK_RULES;
+    const response = await axiosInstance.get(`/workspaces/${workspaceId}/rules`);
+    return response.data.data;
   },
 
   async createRule(workspaceId, orgId, rule) {
-    const newRule = { id: `rule-uuid-${Math.random().toString(36).substr(2, 9)}`, ...rule, status: 'active' };
-    MOCK_RULES.push(newRule);
-    return newRule;
+    const payload = {
+      workspace_id: workspaceId,
+      name: rule.name,
+      description: rule.details,
+      rule_type: 'hard_filter', // defaulting to hard_filter for now, but UI doesn't explicitly have it mapped perfectly
+      conditions: [{ field_name: "custom_rule", operator: "exists", value: null }], // dummy condition
+      priority: rule.priority,
+    };
+    const response = await axiosInstance.post(`/workspaces/${workspaceId}/rules`, payload);
+    return response.data.data;
+  },
+
+  async deleteRule(workspaceId, ruleId) {
+    const response = await axiosInstance.delete(`/workspaces/${workspaceId}/rules/${ruleId}`);
+    return response.data.data;
   }
 };
