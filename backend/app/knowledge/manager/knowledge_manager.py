@@ -66,6 +66,30 @@ class KnowledgeManager:
                 ) from e
             raise
 
+    async def analyze_asset(
+        self, asset: KnowledgeAsset, available_schemas: list[KnowledgeSchema]
+    ) -> tuple[Any, str]:
+        """Analyze a new knowledge asset without indexing it.
+
+        Args:
+            asset: The KnowledgeAsset domain object to analyze.
+            available_schemas: List of available schemas for the analyzer to choose from.
+
+        Returns:
+            A tuple of (DocumentAnalysisResult, selection_method).
+
+        Raises:
+            KnowledgeLayerError: If the analysis fails.
+        """
+        try:
+            return await self.document_processor.analyze_asset(asset, available_schemas)
+        except Exception as e:
+            if not isinstance(e, KnowledgeLayerError):
+                raise KnowledgeLayerError(
+                    f"Failed to analyze asset {asset.id}: {str(e)}"
+                ) from e
+            raise
+
     async def index_batch(
         self,
         assets: list[KnowledgeAsset],

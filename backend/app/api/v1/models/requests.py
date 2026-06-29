@@ -36,3 +36,50 @@ class DecisionOutcomeRequest(BaseModel):
     final_outcome: str | None = Field(
         None, description="The observed real-world outcome (if known)."
     )
+
+
+class OrganizationCreateRequest(BaseModel):
+    """Request payload for self-service organization onboarding."""
+    
+    name: str = Field(..., min_length=2, max_length=150, description="Organization name")
+    description: str | None = Field(None, max_length=1000, description="Optional description")
+
+
+class WorkspaceCreateRequest(BaseModel):
+    """Request payload for creating a new workspace."""
+
+    name: str = Field(
+        ...,
+        min_length=1,
+        max_length=300,
+        description="Human-readable workspace name.",
+    )
+    description: str | None = Field(
+        default=None,
+        max_length=2000,
+        description="Optional description of this workspace's purpose.",
+    )
+    goal: str | None = Field(
+        default=None,
+        max_length=5000,
+        description="The primary objective of this workspace decision context.",
+    )
+    success_metrics: str | None = Field(
+        default=None,
+        max_length=5000,
+        description="Metrics by which the outcome of decisions in this workspace is evaluated.",
+    )
+    decision_points: str | None = Field(
+        default=None,
+        max_length=5000,
+        description="Key points of consideration when evaluating options in this workspace.",
+    )
+
+
+class WorkspaceKnowledgeAttachRequest(BaseModel):
+    """Request payload to attach existing knowledge assets to a workspace."""
+
+    asset_ids: list[UUID] = Field(
+        ...,
+        description="List of Organization Knowledge Asset IDs to attach to the workspace."
+    )

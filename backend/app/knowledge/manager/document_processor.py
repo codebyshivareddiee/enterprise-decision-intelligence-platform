@@ -40,6 +40,56 @@ class DocumentProcessor:
         self.rule_analyzer = rule_analyzer or RuleBasedAnalyzer()
         self.ai_analyzer = ai_analyzer or AIDocumentAnalyzer()
 
+    async def analyze_asset(
+        self, asset: KnowledgeAsset, available_schemas: list[KnowledgeSchema]
+    ) -> tuple["DocumentAnalysisResult", str]:
+        """Analyze a KnowledgeAsset without chunking or embedding.
+        
+        Args:
+            asset: The KnowledgeAsset to process.
+            available_schemas: Schemas available for the analyzer to select from.
+            
+        Returns:
+            A tuple of (DocumentAnalysisResult, selection_method).
+            
+        Raises:
+            KnowledgeLayerError: If analysis fails.
+        """
+        try:
+            # 1. Parse
+            parser = self.parser_registry.get_parser(asset.content_type)
+            parsed_doc = await parser.parse(asset)
+
+            # 2. Analyze (For the upload wizard, we prioritize rich AI suggestions)
+            analysis_result = await self.ai_analyzer.analyze(
+                asset, parsed_doc, available_schemas
+            )
+            selection_method = "ai"
+
+            if not analysis_result:
+                # Fallback to defaults if both analyzers fail
+                from app.knowledge.analyzer.models import (
+                    ChunkProfile,
+                    DocumentAnalysisResult,
+                )
+
+                analysis_result = DocumentAnalysisResult(
+                    matched_schema_id=(
+                        available_schemas[0].id if available_schemas else None
+                    ),
+                    chunking_strategy="SlidingWindowChunker",
+                    chunk_profile=ChunkProfile.MEDIUM,
+                    confidence=0.5,
+                    reasoning="Fallback strategy.",
+                )
+                selection_method = "fallback"
+
+            return analysis_result, selection_method
+        except Exception as e:
+            raise KnowledgeLayerError(
+                f"Unexpected error analyzing asset {asset.id}: {str(e)}"
+            ) from e
+
     async def process(
         self, asset: KnowledgeAsset, available_schemas: list[KnowledgeSchema]
     ) -> list[PreparedChunk]:

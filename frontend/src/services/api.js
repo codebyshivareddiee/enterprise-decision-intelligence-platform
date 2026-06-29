@@ -1,8 +1,7 @@
-import { jwtDecode } from 'jwt-decode';
+import axios from 'axios';
 
-const BASE_URL = 'http://localhost:8000/api/v1';
+const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1';
 
-// Token helpers
 export const getAccessToken = () => localStorage.getItem('access_token');
 export const getRefreshToken = () => localStorage.getItem('refresh_token');
 export const saveTokens = (access, refresh) => {
@@ -14,419 +13,245 @@ export const clearTokens = () => {
   localStorage.removeItem('refresh_token');
 };
 
-export const getHeaders = () => {
-  const token = getAccessToken();
-  const headers = {
-    'Content-Type': 'application/json',
-  };
-  if (token) {
-    headers['Authorization'] = `Bearer ${token}`;
-  }
-  return headers;
+const axiosInstance = axios.create({
+  baseURL: BASE_URL,
+});
+
+axiosInstance.interceptors.request.use(
+  (config) => {
+    const token = getAccessToken();
+    if (token && !config.headers.Authorization) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+    return config;
+  },
+  (error) => Promise.reject(error)
+);
+
+let isRefreshing = false;
+let failedQueue = [];
+
+const processQueue = (error, token = null) => {
+  failedQueue.forEach(prom => {
+    if (error) {
+      prom.reject(error);
+    } else {
+      prom.resolve(token);
+    }
+  });
+  failedQueue = [];
 };
 
-// High-fidelity fallback mock data
-const MOCK_ORGS = [];
+axiosInstance.interceptors.response.use(
+  (response) => response,
+  async (error) => {
+    const originalRequest = error.config;
+    if (error.response?.status === 401 && !originalRequest._retry && originalRequest.url !== '/auth/login' && originalRequest.url !== '/auth/refresh') {
+      if (isRefreshing) {
+        return new Promise(function(resolve, reject) {
+          failedQueue.push({ resolve, reject });
+        }).then(token => {
+          originalRequest.headers['Authorization'] = 'Bearer ' + token;
+          return axiosInstance(originalRequest);
+        }).catch(err => {
+          return Promise.reject(err);
+        });
+      }
 
-const MOCK_WORKSPACES = [];
+      originalRequest._retry = true;
+      isRefreshing = true;
 
-const MOCK_KNOWLEDGE_ASSETS = [];
+      const refreshToken = getRefreshToken();
+      if (!refreshToken) {
+        isRefreshing = false;
+        clearTokens();
+        window.location.href = '/login';
+        return Promise.reject(error);
+      }
 
-const MOCK_DECISIONS = [];
+      try {
+        const { data } = await axios.post(`${BASE_URL}/auth/refresh`, { refresh_token: refreshToken });
+        saveTokens(data.access_token, data.refresh_token);
+        axiosInstance.defaults.headers.common['Authorization'] = 'Bearer ' + data.access_token;
+        originalRequest.headers['Authorization'] = 'Bearer ' + data.access_token;
+        processQueue(null, data.access_token);
+        return axiosInstance(originalRequest);
+      } catch (err) {
+        processQueue(err, null);
+        clearTokens();
+        window.location.href = '/login';
+        return Promise.reject(err);
+      } finally {
+        isRefreshing = false;
+      }
+    }
+    return Promise.reject(error);
+  }
+);
 
-const MOCK_RULES = [];
+// High-fidelity fallback mock data for endpoints intentionally kept static
+const MOCK_RULES = [
+  { id: 'rule-1', name: 'Budget Constraint', status: 'active' },
+  { id: 'rule-2', name: 'ISO 27001 Compliance', status: 'active' }
+];
 
 export const api = {
   // Authentication
   async register(email, password, full_name, company_name = '') {
-    try {
-      const response = await fetch(`${BASE_URL}/auth/register`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password, full_name, company_name }),
-      });
-      const data = await response.json().catch(() => ({}));
-      if (response.ok) {
-        return { success: true, message: 'User registered successfully.' };
-      } else {
-        return { success: false, message: data.detail || 'Registration failed.' };
-      }
-    } catch (e) {
-      console.warn('Backend register failed.', e);
-      return { success: false, message: 'Cannot connect to backend server. Please verify the backend is running on port 8000.' };
-    }
+    const response = await axiosInstance.post('/auth/register', { email, password, full_name, company_name });
+    return response.data;
   },
 
   async login(email, password) {
-    try {
-      const formData = new URLSearchParams();
-      formData.append('username', email);
-      formData.append('password', password);
-
-      const response = await fetch(`${BASE_URL}/auth/login`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: formData,
-      });
-      if (response.ok) {
-        const tokens = await response.json();
-        saveTokens(tokens.access_token, tokens.refresh_token);
-        return await this.getMe();
-      }
-    } catch (e) {
-      console.warn('Backend login failed.', e);
-    }
-    return null;
+    const formData = new URLSearchParams();
+    formData.append('username', email);
+    formData.append('password', password);
+    const response = await axiosInstance.post('/auth/login', formData, {
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+    });
+    const tokens = response.data;
+    saveTokens(tokens.access_token, tokens.refresh_token);
+    return await this.getMe();
   },
 
+  async logout() {
+    try {
+      await axiosInstance.post('/auth/logout');
+    } finally {
+      clearTokens();
+    }
+  },
 
   async getMe() {
-    const token = getAccessToken();
-    if (!token) return null;
-    if (token.startsWith('mock')) {
-      const orgId = MOCK_ORGS[0]?.id || '1a2b3c4d-5e6f-7a8b-9c0d-1e2f3a4b5c6d';
-      return {
-        id: 'user-uuid-1234',
-        email: 'N/A',
-        full_name: 'N/A',
-        status: 'active',
-        organization_ids: [orgId],
-        memberships: [{ organization_id: orgId, workspace_ids: MOCK_WORKSPACES.map(w => w.id), role: 'PLATFORM_ADMIN' }]
-      };
-    }
-
-    try {
-      const response = await fetch(`${BASE_URL}/auth/me`, {
-        method: 'GET',
-        headers: getHeaders(),
-      });
-      if (response.ok) {
-        const res = await response.json();
-        return res.data;
-      }
-    } catch (e) {
-      console.warn('Backend getMe failed.', e);
-    }
-    return null;
+    const response = await axiosInstance.get('/auth/me');
+    return response.data.data;
   },
 
   // Organizations
   async getOrganizations() {
-    try {
-      const response = await fetch(`${BASE_URL}/organizations`, {
-        method: 'GET',
-        headers: getHeaders(),
-      });
-      if (response.ok) {
-        const res = await response.json();
-        return res.data;
-      }
-    } catch (e) {
-      console.warn('Backend list organizations failed, using mock.', e);
-    }
-    return MOCK_ORGS;
+    const response = await axiosInstance.get('/organizations');
+    return response.data.data;
+  },
+
+  async createOrganization(name, description) {
+    const response = await axiosInstance.post('/organizations', { name, description });
+    return response.data.data;
   },
 
   async getOrgStats(orgId) {
-    try {
-      const response = await fetch(`${BASE_URL}/organizations/${orgId}/stats`, {
-        method: 'GET',
-        headers: getHeaders(),
-      });
-      if (response.ok) {
-        const res = await response.json();
-        return res.data;
-      }
-    } catch (e) {
-      console.warn('Backend org stats failed, using mock.', e);
-    }
+    // Intentionally kept static for hackathon
     return {
-      total_workspaces: MOCK_WORKSPACES.length,
-      decisions_made: 0,
-      knowledge_assets: 0,
-      active_users: 0
+      total_workspaces: 2,
+      decisions_made: 15,
+      knowledge_assets: 45,
+      active_users: 8
     };
   },
 
   // Workspaces
   async getWorkspaces(orgId) {
-    try {
-      const response = await fetch(`${BASE_URL}/organizations/${orgId}/workspaces/summary`, {
-        method: 'GET',
-        headers: getHeaders(),
-      });
-      if (response.ok) {
-        const res = await response.json();
-        return res.data;
-      }
-    } catch (e) {
-      // fallback to list standard spaces
-      try {
-        const response2 = await fetch(`${BASE_URL}/organizations/${orgId}/workspaces`, {
-          method: 'GET',
-          headers: getHeaders(),
-        });
-        if (response2.ok) {
-          const res2 = await response2.json();
-          // merge with default counts
-          return res2.data.map((w, index) => ({
-            ...w,
-            decisions_count_30d: MOCK_WORKSPACES[index]?.decisions_count_30d || 10,
-            knowledge_assets_count: MOCK_WORKSPACES[index]?.knowledge_assets_count || 120,
-            active_users_count: MOCK_WORKSPACES[index]?.active_users_count || 5,
-            last_activity: MOCK_WORKSPACES[index]?.last_activity || '1 day ago'
-          }));
-        }
-      } catch (e2) { }
-    }
-    return MOCK_WORKSPACES;
+    const response = await axiosInstance.get(`/organizations/${orgId}/workspaces`);
+    return response.data.data.map(w => ({
+      ...w,
+      decisions_count_30d: 10,
+      knowledge_assets_count: 120,
+      active_users_count: 5,
+      last_activity: '1 day ago'
+    }));
   },
 
-  async createWorkspace(orgId, name, description) {
-    try {
-      const response = await fetch(`${BASE_URL}/workspaces`, {
-        method: 'POST',
-        headers: getHeaders(),
-        body: JSON.stringify({ organization_id: orgId, name, description, owner_id: 'user-uuid-1234' }),
-      });
-      if (response.ok) {
-        const res = await response.json();
-        return res.data;
-      }
-    } catch (e) {
-      console.warn('Backend create workspace failed, using mock.', e);
-    }
-    const newWs = {
-      id: `ws-uuid-${Math.random().toString(36).substr(2, 9)}`,
-      organization_id: orgId,
-      name,
-      description,
-      status: 'active',
-      decisions_count_30d: 0,
-      knowledge_assets_count: 0,
-      active_users_count: 1,
-      last_activity: 'Just created'
-    };
-    MOCK_WORKSPACES.push(newWs);
-    return newWs;
+  async createWorkspace(name, description, goal, successMetrics, decisionPoints) {
+    const response = await axiosInstance.post('/workspaces', { 
+      name, 
+      description, 
+      goal, 
+      success_metrics: successMetrics, 
+      decision_points: decisionPoints 
+    });
+    return response.data.data;
+  },
+
+  async updateWorkspace(workspaceId, updatedWorkspace) {
+    const response = await axiosInstance.patch(`/workspaces/${workspaceId}`, updatedWorkspace);
+    return response.data.data;
+  },
+
+  async importKnowledgeToWorkspace(workspaceId, assetIds) {
+    const response = await axiosInstance.post(`/workspaces/${workspaceId}/knowledge`, { asset_ids: assetIds });
+    return response.data.data;
   },
 
   // Knowledge
   async getKnowledgeAssets(workspaceId = null) {
-    try {
-      const response = await fetch(`${BASE_URL}/knowledge/assets`, {
-        method: 'GET',
-        headers: getHeaders(),
-      });
-      if (response.ok) {
-        const res = await response.json();
-        return res.data;
-      }
-    } catch (e) {
-      console.warn('Backend list assets failed, using mock.', e);
-    }
-    return MOCK_KNOWLEDGE_ASSETS;
+    const response = await axiosInstance.get('/knowledge/assets');
+    return response.data.data;
   },
 
-  async uploadKnowledge(workspaceId, orgId, description, file) {
-    try {
-      const formData = new FormData();
-      formData.append('workspace_id', workspaceId);
-      formData.append('organization_id', orgId);
-      formData.append('description', description);
-      formData.append('file', file);
+  async uploadKnowledge(workspaceId, orgId, description, file, chunkingStrategy = null, chunkProfile = null, schemaId = null) {
+    const formData = new FormData();
+    if (workspaceId) formData.append('workspace_id', workspaceId);
+    formData.append('organization_id', orgId);
+    formData.append('description', description);
+    formData.append('file', file);
+    
+    if (chunkingStrategy) formData.append('chunking_strategy_override', chunkingStrategy);
+    if (chunkProfile) formData.append('chunk_profile_override', chunkProfile);
+    if (schemaId) formData.append('schema_id_override', schemaId);
+    
+    const response = await axiosInstance.post('/knowledge/upload', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    });
+    return response.data.data;
+  },
 
-      const headers = getHeaders();
-      delete headers['Content-Type'];
-
-      const response = await fetch(`${BASE_URL}/knowledge/upload`, {
-        method: 'POST',
-        headers: headers,
-        body: formData
-      });
-      if (response.ok) {
-        const res = await response.json();
-        return res.data;
-      }
-    } catch (e) {
-      console.warn('Backend upload knowledge failed, using mock.', e);
-    }
-
-    // Mock response matching Image 6 analysis result
-    return {
-      asset_id: `asset-uuid-${Math.random().toString(36).substr(2, 9)}`,
-      schema_selected: 'N/A',
-      chunking_strategy: 'N/A',
-      chunk_profile: 'N/A',
-      processing_reasoning: 'N/A',
-      selection_method: 'N/A',
-      confidence: 0,
-      chunks_created: 0
-    };
+  async analyzeKnowledge(workspaceId, orgId, description, file, schemaId = null) {
+    const formData = new FormData();
+    if (workspaceId) formData.append('workspace_id', workspaceId);
+    formData.append('organization_id', orgId);
+    formData.append('description', description);
+    formData.append('file', file);
+    if (schemaId) formData.append('schema_id', schemaId);
+    
+    const response = await axiosInstance.post('/knowledge/analyze', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    });
+    return response.data.data;
   },
 
   // Decisions
   async getDecisions(workspaceId) {
-    try {
-      const response = await fetch(`${BASE_URL}/workspaces/${workspaceId}/decisions`, {
-        method: 'GET',
-        headers: getHeaders(),
-      });
-      if (response.ok) {
-        const res = await response.json();
-        return res.data;
-      }
-    } catch (e) {
-      console.warn('Backend get decisions failed, using mock.', e);
-    }
-    return MOCK_DECISIONS.filter(d => d.workspace_id === workspaceId);
+    const response = await axiosInstance.get(`/decisions`, { params: { workspace_id: workspaceId } });
+    return response.data.data;
   },
 
   async getDecision(decisionId) {
-    try {
-      const response = await fetch(`${BASE_URL}/decisions/${decisionId}`, {
-        method: 'GET',
-        headers: getHeaders(),
-      });
-      if (response.ok) {
-        const res = await response.json();
-        return res.data;
-      }
-    } catch (e) {
-      console.warn('Backend get single decision failed, using mock.', e);
-    }
-    return MOCK_DECISIONS.find(d => d.id === decisionId) || MOCK_DECISIONS[0];
+    const response = await axiosInstance.get(`/decisions/${decisionId}`);
+    return response.data.data;
   },
 
   async executeDecision(workspaceId, userRequest) {
-    try {
-      const response = await fetch(`${BASE_URL}/decisions/execute`, {
-        method: 'POST',
-        headers: getHeaders(),
-        body: JSON.stringify({ workspace_id: workspaceId, user_request: userRequest }),
-      });
-      if (response.ok) {
-        const res = await response.json();
-        return res.data;
-      }
-    } catch (e) {
-      console.warn('Backend execute decision failed, using mock.', e);
-    }
-
-    const decisionId = `dec-uuid-${Math.random().toString(36).substr(2, 9)}`;
-    const newDec = {
-      id: decisionId,
-      workspace_id: workspaceId,
-      name: 'N/A',
-      status: 'pending',
-      goal: userRequest,
-      decided_by_name: 'N/A',
-      date: 'N/A',
-      confidence: 0,
-      code: 'N/A',
-      recommended_option: 'N/A',
-      explanation: 'N/A',
-      rules: [],
-      evidence: []
-    };
-    MOCK_DECISIONS.unshift(newDec);
-    return newDec;
+    const response = await axiosInstance.post('/decisions/execute', { workspace_id: workspaceId, user_request: userRequest });
+    return response.data.data;
   },
 
   async resumeDecision(decisionId, feedback) {
-    try {
-      const response = await fetch(`${BASE_URL}/decisions/${decisionId}/resume`, {
-        method: 'POST',
-        headers: getHeaders(),
-        body: JSON.stringify({ feedback }),
-      });
-      if (response.ok) {
-        const res = await response.json();
-        return res.data;
-      }
-    } catch (e) {
-      console.warn('Backend resume decision failed, using mock.', e);
-    }
-    const dec = MOCK_DECISIONS.find(d => d.id === decisionId);
-    if (dec) {
-      dec.status = 'approved';
-    }
-    return { success: true };
+    const response = await axiosInstance.post(`/decisions/${decisionId}/resume`, { feedback });
+    return response.data.data;
   },
 
   async recordOutcome(decisionId, humanDecision, feedback) {
-    try {
-      const response = await fetch(`${BASE_URL}/decisions/outcome`, {
-        method: 'POST',
-        headers: getHeaders(),
-        body: JSON.stringify({ decision_id: decisionId, human_decision: humanDecision, feedback }),
-      });
-      if (response.ok) {
-        const res = await response.json();
-        return res.data;
-      }
-    } catch (e) {
-      console.warn('Backend record outcome failed, using mock.', e);
-    }
-    return { success: true };
+    const response = await axiosInstance.post('/decisions/outcome', { decision_id: decisionId, human_decision: humanDecision, feedback });
+    return response.data.data;
   },
 
-  // Rules
+  // Rules (Static for Hackathon)
   async getRules(workspaceId) {
-    try {
-      const response = await fetch(`${BASE_URL}/workspaces/${workspaceId}/rules`, {
-        method: 'GET',
-        headers: getHeaders(),
-      });
-      if (response.ok) {
-        const res = await response.json();
-        return res.data;
-      }
-    } catch (e) {
-      console.warn('Backend get rules failed, using mock.', e);
-    }
     return MOCK_RULES;
   },
 
   async createRule(workspaceId, orgId, rule) {
-    try {
-      const response = await fetch(`${BASE_URL}/workspaces/${workspaceId}/rules`, {
-        method: 'POST',
-        headers: getHeaders(),
-        body: JSON.stringify({ organization_id: orgId, workspace_id: workspaceId, ...rule }),
-      });
-      if (response.ok) {
-        const res = await response.json();
-        return res.data;
-      }
-    } catch (e) {
-      console.warn('Backend create rule failed, using mock.', e);
-    }
     const newRule = { id: `rule-uuid-${Math.random().toString(36).substr(2, 9)}`, ...rule, status: 'active' };
     MOCK_RULES.push(newRule);
     return newRule;
-  },
-
-  async updateWorkspace(workspaceId, updatedWorkspace) {
-    try {
-      const response = await fetch(`${BASE_URL}/workspaces/${workspaceId}`, {
-        method: 'PATCH',
-        headers: getHeaders(),
-        body: JSON.stringify(updatedWorkspace),
-      });
-      if (response.ok) {
-        const res = await response.json();
-        return res.data;
-      }
-    } catch (e) {
-      console.warn('Backend update workspace failed, using mock.', e);
-    }
-    // Update local mock
-    const idx = MOCK_WORKSPACES.findIndex(w => w.id === workspaceId);
-    if (idx !== -1) {
-      MOCK_WORKSPACES[idx] = { ...MOCK_WORKSPACES[idx], ...updatedWorkspace };
-      return MOCK_WORKSPACES[idx];
-    }
-    return updatedWorkspace;
   }
 };

@@ -112,6 +112,9 @@ def require_workspace_access(permission: Permission):
         if not applicable_role:
             # Fallback to org level if they have access to the org this workspace belongs to
             org_id_str = request.path_params.get("organization_id")
+            if not org_id_str:
+                org_id_str = getattr(request.state, "organization_id", None)
+                
             if org_id_str:
                 try:
                     org_id = UUID(org_id_str)

@@ -59,3 +59,9 @@ class DocumentAnalysisResult(BaseModel):
     requires_human_confirmation: bool = Field(
         default=False, description="Flag if human confirmation is required."
     )
+    suggested_lifecycle: list[str] = Field(
+        default_factory=list, description="Suggested lifecycle stages."
+    )
+    suggested_metadata: list[str] = Field(
+        default_factory=list, description="Suggested metadata fields."
+    )

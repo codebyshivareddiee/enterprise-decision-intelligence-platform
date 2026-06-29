@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Award, CheckCircle, FileText, XCircle, ChevronLeft, ArrowRight } from 'lucide-react';
 import { api } from '../services/api';
+import { toast } from 'sonner';
 
 export default function Review({ workspace, decisionId, onBackToDashboard, onViewDetails }) {
   const [decision, setDecision] = useState(null);
@@ -15,32 +16,64 @@ export default function Review({ workspace, decisionId, onBackToDashboard, onVie
 
   const loadDecision = async () => {
     setLoading(true);
-    const fetchedDecision = await api.getDecision(decisionId);
-    setDecision(fetchedDecision);
+    try {
+      let fetchedDecision = null;
+      if (window.__lastDecisionResult && (window.__lastDecisionResult.id === decisionId || window.__lastDecisionResult.decision_id === decisionId)) {
+        const lr = window.__lastDecisionResult;
+        fetchedDecision = {
+          id: decisionId,
+          name: `AI Evaluation: ${workspace?.goal?.substring(0, 24) || 'Decision'}...`,
+          goal: workspace?.goal || 'No goal specified',
+          status: lr.execution_status.toLowerCase(),
+          confidence: lr.recommendation?.final_score ? Math.round(lr.recommendation.final_score * 100) : 0,
+          date: new Date().toLocaleDateString(),
+          decided_by_name: 'AI Orchestrator',
+          recommended_option: lr.recommendation?.entity_id || 'Unknown',
+          explanation: lr.explanation || 'No explanation generated.',
+          evidence: lr.supporting_evidence || [],
+          rules: [],
+          workspace: workspace
+        };
+      } else {
+        fetchedDecision = await api.getDecision(decisionId);
+        fetchedDecision.workspace = workspace;
+      }
+      setDecision(fetchedDecision);
+    } catch (err) {
+      toast.error('Failed to load decision review context.');
+    }
     setLoading(false);
   };
 
   const handleApprove = async () => {
     if (!decision) return;
     setLoading(true);
-    await api.recordOutcome(decision.id, 'Approved', feedback);
-    await api.resumeDecision(decision.id, feedback);
-    alert('Decision Approved successfully!');
-    onBackToDashboard();
+    try {
+      await api.recordOutcome(decision.id, 'Approved', feedback);
+      await api.resumeDecision(decision.id, feedback);
+      toast.success('Decision Approved successfully!');
+      onBackToDashboard();
+    } catch (err) {
+      toast.error('Failed to approve decision.');
+    }
     setLoading(false);
   };
 
   const handleReject = async () => {
     if (!decision) return;
     if (!feedback.trim()) {
-      alert('Feedback is required when rejecting a recommendation.');
+      toast.error('Feedback is required when rejecting a recommendation.');
       return;
     }
     setLoading(true);
-    await api.recordOutcome(decision.id, 'Rejected', feedback);
-    await api.resumeDecision(decision.id, feedback);
-    alert('Decision Rejected.');
-    onBackToDashboard();
+    try {
+      await api.recordOutcome(decision.id, 'Rejected', feedback);
+      await api.resumeDecision(decision.id, feedback);
+      toast.success('Decision Rejected.');
+      onBackToDashboard();
+    } catch (err) {
+      toast.error('Failed to reject decision.');
+    }
     setLoading(false);
   };
 
@@ -101,24 +134,29 @@ export default function Review({ workspace, decisionId, onBackToDashboard, onVie
               <h3>Supporting Evidence</h3>
             </div>
             <div className="evidence-list">
-              {decision.evidence?.map((file, idx) => (
-                <div key={idx} className="evidence-row-item">
-                  <div className="evidence-row-left">
-                    <FileText size={18} style={{ color: '#ef4444' }} />
-                    <span className="name">{file}</span>
+              {decision.evidence?.map((item, idx) => (
+                <div key={idx} className="evidence-row-item" style={{ flexDirection: 'column', alignItems: 'flex-start', padding: '12px', gap: '8px' }}>
+                  <div className="evidence-row-left" style={{ width: '100%', display: 'flex', justifyContent: 'space-between' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <FileText size={18} style={{ color: '#ef4444' }} />
+                      <span className="name" style={{ fontWeight: '500' }}>{item.asset_name || item.name || item}</span>
+                    </div>
+                    <div className="evidence-row-right">
+                      {item.relevance_score ? `Score: ${Math.round(item.relevance_score * 100)}%` : ''}
+                    </div>
                   </div>
-                  <div className="evidence-row-right">
-                    {idx === 0 ? '12 pages' : (idx === 1 ? '18 pages' : '24 pages')}
-                  </div>
+                  {item.chunk_preview && (
+                    <div style={{ fontSize: '12px', color: 'var(--text-muted)', background: 'rgba(255,255,255,0.05)', padding: '8px', borderRadius: '4px', width: '100%', fontStyle: 'italic' }}>
+                      "{item.chunk_preview}"
+                    </div>
+                  )}
                 </div>
               ))}
               {(!decision.evidence || decision.evidence.length === 0) && (
                 <div className="evidence-row-item">
                   <div className="evidence-row-left">
-                    <FileText size={18} style={{ color: '#ef4444' }} />
-                    <span className="name">Vendor_Profile.pdf</span>
+                    <span className="name">No supporting evidence provided.</span>
                   </div>
-                  <div className="evidence-row-right">12 pages</div>
                 </div>
               )}
             </div>
@@ -194,26 +232,29 @@ export default function Review({ workspace, decisionId, onBackToDashboard, onVie
 
       {/* Decision Context bottom row */}
       <div className="review-context-card">
+        <h3 style={{ marginBottom: '16px', fontSize: '16px' }}>Decision Context</h3>
         <div className="review-context-grid">
           <div className="review-context-item">
-            <p className="label">Decision Name</p>
-            <p className="value">{decision.name}</p>
-          </div>
-          <div className="review-context-item">
-            <p className="label">Decision Objective</p>
+            <p className="label">Decision Objective / Goal</p>
             <p className="value" style={{ maxWidth: '320px', wordBreak: 'break-all' }}>
-              {decision.goal}
+              {decision.workspace?.goal || decision.goal}
             </p>
           </div>
           <div className="review-context-item">
-            <p className="label">Requested By</p>
-            <p className="value">
-              {decision.decided_by_name || 'Alex Johnson'} on {decision.date || 'May 20, 2025'}
+            <p className="label">Success Metrics</p>
+            <p className="value" style={{ maxWidth: '320px', wordBreak: 'break-all' }}>
+              {decision.workspace?.success_metrics || 'None specified'}
+            </p>
+          </div>
+          <div className="review-context-item">
+            <p className="label">Decision Points</p>
+            <p className="value" style={{ maxWidth: '320px', wordBreak: 'break-all' }}>
+              {decision.workspace?.decision_points || 'None specified'}
             </p>
           </div>
         </div>
 
-        <button className="btn btn-secondary" onClick={onViewDetails}>
+        <button className="btn btn-secondary" style={{ marginTop: '20px' }} onClick={onViewDetails}>
           View Execution Details
         </button>
       </div>

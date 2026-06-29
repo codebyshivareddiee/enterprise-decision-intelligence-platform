@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { HelpCircle, Paperclip, Lightbulb, ArrowRight, ShieldAlert, Check, Play, PlayCircle, Loader2, Maximize2, Plus } from 'lucide-react';
 import { api } from '../services/api';
+import { toast } from 'sonner';
 
 export default function Decisions({ workspace, initialQuery, onDecisionComplete }) {
   const [subview, setSubview] = useState('input'); // 'input' | 'graph'
@@ -42,146 +43,38 @@ export default function Decisions({ workspace, initialQuery, onDecisionComplete 
     setActiveStep(0);
     setElapsedTime(0);
 
-    // Call execute decision on backend
-    const decRes = await api.executeDecision(workspace?.id || 'ws1-uuid-0001', queryText);
-    setDecisionId(decRes.id);
+    try {
+      // Call execute decision on backend
+      const decRes = await api.executeDecision(workspace?.id || 'ws1-uuid-0001', queryText);
+      setDecisionId(decRes.id || decRes.decision_id);
 
-    // Reset steps state
-    setStepStates([
-      { id: 0, name: 'Retriever Agent', desc: 'Retrieves relevant knowledge from selected sources.', status: 'pending', time: 'Pending', count: 'Not started', output: 'RETRIEVED_CHUNKS' },
-      { id: 1, name: 'Reasoning Agent', desc: 'Analyzes retrieved content and derives key insights.', status: 'pending', time: 'Pending', count: 'Not started', output: 'REASONING_RESULT' },
-      { id: 2, name: 'Recommendation Agent', desc: 'Generates recommendation based on reasoning and business context.', status: 'pending', time: 'Pending', count: 'Not started', output: 'RECOMMENDATION' },
-      { id: 3, name: 'Rule Checker Agent', desc: 'Validates the recommendation against business rules and constraints.', status: 'pending', time: 'Pending', count: 'Not started', output: 'VALIDATION_RESULT' },
-      { id: 4, name: 'Explanation Agent', desc: 'Creates a natural language explanation of the final decision.', status: 'pending', time: 'Pending', count: 'Not started', output: 'EXPLANATION' }
-    ]);
-
-    startSimulation();
-  };
-
-  const startSimulation = () => {
-    // Step-by-step state simulation matching Image 8 times
-    // Step 0: Retriever Agent
-    setTimeout(() => {
-      setStepStates(prev => {
-        const copy = [...prev];
-        copy[0].status = 'running';
-        copy[0].time = 'Running...';
-        return copy;
-      });
-      setProgress(12);
-    }, 500);
-
-    setTimeout(() => {
-      setStepStates(prev => {
-        const copy = [...prev];
-        copy[0].status = 'completed';
-        copy[0].time = '2.34s';
-        copy[0].count = 'Produced 128 chunks';
-        return copy;
-      });
-      setProgress(25);
-      setActiveStep(1);
-    }, 2840);
-
-    // Step 1: Reasoning Agent
-    setTimeout(() => {
-      setStepStates(prev => {
-        const copy = [...prev];
-        copy[1].status = 'running';
-        copy[1].time = 'Running...';
-        return copy;
-      });
-      setProgress(38);
-    }, 3340);
-
-    setTimeout(() => {
-      setStepStates(prev => {
-        const copy = [...prev];
-        copy[1].status = 'completed';
-        copy[1].time = '4.18s';
-        copy[1].count = 'Generated reasoning';
-        return copy;
-      });
-      setProgress(50);
-      setActiveStep(2);
-    }, 7520);
-
-    // Step 2: Recommendation Agent
-    setTimeout(() => {
-      setStepStates(prev => {
-        const copy = [...prev];
-        copy[2].status = 'running';
-        copy[2].time = 'Running...';
-        return copy;
-      });
-      setProgress(62);
-    }, 8020);
-
-    setTimeout(() => {
-      setStepStates(prev => {
-        const copy = [...prev];
-        copy[2].status = 'completed';
-        copy[2].time = '3.05s';
-        copy[2].count = 'Generating recommendations';
-        return copy;
-      });
-      setProgress(75);
-      setActiveStep(3);
-    }, 11070);
-
-    // Step 3: Rule Checker Agent
-    setTimeout(() => {
-      setStepStates(prev => {
-        const copy = [...prev];
-        copy[3].status = 'running';
-        copy[3].time = 'Running...';
-        return copy;
-      });
-      setProgress(88);
-    }, 11570);
-
-    setTimeout(() => {
-      setStepStates(prev => {
-        const copy = [...prev];
-        copy[3].status = 'completed';
-        copy[3].time = '1.50s';
-        copy[3].count = 'Rules verified';
-        return copy;
-      });
-      setProgress(90);
-      setActiveStep(4);
-    }, 13070);
-
-    // Step 4: Explanation Agent
-    setTimeout(() => {
-      setStepStates(prev => {
-        const copy = [...prev];
-        copy[4].status = 'running';
-        copy[4].time = 'Running...';
-        return copy;
-      });
-      setProgress(96);
-    }, 13570);
-
-    setTimeout(() => {
-      setStepStates(prev => {
-        const copy = [...prev];
-        copy[4].status = 'completed';
-        copy[4].time = '2.00s';
-        copy[4].count = 'Explanation finalized';
-        return copy;
-      });
+      // Reset steps state to completed
+      setStepStates([
+        { id: 0, name: 'Retriever Agent', desc: 'Retrieves relevant knowledge from selected sources.', status: 'completed', time: 'Completed', count: 'Chunks retrieved', output: 'RETRIEVED_CHUNKS' },
+        { id: 1, name: 'Reasoning Agent', desc: 'Analyzes retrieved content and derives key insights.', status: 'completed', time: 'Completed', count: 'Analysis complete', output: 'REASONING_RESULT' },
+        { id: 2, name: 'Recommendation Agent', desc: 'Generates recommendation based on reasoning and business context.', status: 'completed', time: 'Completed', count: 'Recommendation ready', output: 'RECOMMENDATION' },
+        { id: 3, name: 'Rule Checker Agent', desc: 'Validates the recommendation against business rules and constraints.', status: 'completed', time: 'Completed', count: 'Rules verified', output: 'VALIDATION_RESULT' },
+        { id: 4, name: 'Explanation Agent', desc: 'Creates a natural language explanation of the final decision.', status: 'completed', time: 'Completed', count: 'Explanation finalized', output: 'EXPLANATION' }
+      ]);
+      
       setProgress(100);
       setActiveStep(5);
-    }, 15570);
+      
+      // Store the result so Review can use it
+      window.__lastDecisionResult = decRes;
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Failed to execute decision.');
+      setSubview('input');
+    }
   };
+
+  // Removed simulated timers to rely on synchronous backend call
 
   const handleReviewClick = () => {
     // call final complete callback
     onDecisionComplete(decisionId);
   };
 
-  // Timer simulation
   useEffect(() => {
     let interval = null;
     if (subview === 'graph' && activeStep < 5) {

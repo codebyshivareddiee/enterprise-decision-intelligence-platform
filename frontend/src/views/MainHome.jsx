@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Layers, CheckSquare, BookOpen, Users, UploadCloud, PlusCircle, ArrowRight, FolderPlus } from 'lucide-react';
 import { api } from '../services/api';
+import { toast } from 'sonner';
 
 export default function MainHome({ user, onSelectWorkspace, onTriggerUpload }) {
   const [stats, setStats] = useState({ total_workspaces: 0, decisions_made: 0, knowledge_assets: 0, active_users: 0 });
@@ -8,6 +9,9 @@ export default function MainHome({ user, onSelectWorkspace, onTriggerUpload }) {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [newWsName, setNewWsName] = useState('');
   const [newWsDesc, setNewWsDesc] = useState('');
+  const [newWsGoal, setNewWsGoal] = useState('');
+  const [newWsSuccessMetrics, setNewWsSuccessMetrics] = useState('');
+  const [newWsDecisionPoints, setNewWsDecisionPoints] = useState('');
   const [loading, setLoading] = useState(false);
 
   const orgId = user.organization_ids?.[0];
@@ -20,22 +24,39 @@ export default function MainHome({ user, onSelectWorkspace, onTriggerUpload }) {
 
   const loadDashboardData = async () => {
     setLoading(true);
-    const fetchedStats = await api.getOrgStats(orgId);
-    const fetchedWorkspaces = await api.getWorkspaces(orgId);
-    setStats(fetchedStats);
-    setWorkspaces(fetchedWorkspaces);
+    try {
+      const fetchedStats = await api.getOrgStats(orgId);
+      const fetchedWorkspaces = await api.getWorkspaces(orgId);
+      setStats(fetchedStats);
+      setWorkspaces(fetchedWorkspaces);
+    } catch (err) {
+      toast.error('Failed to load dashboard data. Please try again.');
+    }
     setLoading(false);
   };
 
   const handleCreateWorkspace = async (e) => {
     e.preventDefault();
+    if (!orgId) {
+      toast.error('Onboarding Prerequisite: You must be assigned to an organization to create a workspace.');
+      setShowCreateModal(false);
+      return;
+    }
     if (!newWsName.trim()) return;
 
-    await api.createWorkspace(orgId, newWsName, newWsDesc);
-    setNewWsName('');
-    setNewWsDesc('');
-    setShowCreateModal(false);
-    loadDashboardData();
+    try {
+      await api.createWorkspace(newWsName, newWsDesc, newWsGoal, newWsSuccessMetrics, newWsDecisionPoints);
+      setNewWsName('');
+      setNewWsDesc('');
+      setNewWsGoal('');
+      setNewWsSuccessMetrics('');
+      setNewWsDecisionPoints('');
+      setShowCreateModal(false);
+      toast.success('Workspace created successfully!');
+      loadDashboardData();
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Failed to create workspace.');
+    }
   };
 
   return (
@@ -126,7 +147,13 @@ export default function MainHome({ user, onSelectWorkspace, onTriggerUpload }) {
       <div>
         <div className="table-section-header">
           <h2>Home</h2>
-          <button className="btn btn-secondary" onClick={() => setShowCreateModal(true)}>
+          <button className="btn btn-secondary" onClick={() => {
+            if (!orgId) {
+              toast.error('Onboarding Prerequisite: You must be assigned to an organization to create a workspace.');
+            } else {
+              setShowCreateModal(true);
+            }
+          }}>
             <PlusCircle size={16} />
             <span>Create Workspace</span>
           </button>
@@ -205,13 +232,43 @@ export default function MainHome({ user, onSelectWorkspace, onTriggerUpload }) {
                     required
                   />
                 </div>
-                <div className="auth-input-group">
+                <div className="auth-input-group" style={{ marginBottom: '20px' }}>
                   <label>Description</label>
                   <textarea
-                    style={{ padding: '10px 14px', border: '1px solid var(--border)', borderRadius: '6px', width: '100%', height: '100px', resize: 'none', outline: 'none' }}
+                    style={{ padding: '10px 14px', border: '1px solid var(--border)', borderRadius: '6px', width: '100%', height: '80px', resize: 'none', outline: 'none' }}
                     placeholder="Describe the purpose of this workspace..."
                     value={newWsDesc}
                     onChange={(e) => setNewWsDesc(e.target.value)}
+                  />
+                </div>
+                <div className="auth-input-group" style={{ marginBottom: '20px' }}>
+                  <label>Goal</label>
+                  <input
+                    type="text"
+                    style={{ padding: '10px 14px', border: '1px solid var(--border)', borderRadius: '6px', width: '100%', outline: 'none' }}
+                    placeholder="e.g. Select the best CRM"
+                    value={newWsGoal}
+                    onChange={(e) => setNewWsGoal(e.target.value)}
+                  />
+                </div>
+                <div className="auth-input-group" style={{ marginBottom: '20px' }}>
+                  <label>Success Metrics</label>
+                  <input
+                    type="text"
+                    style={{ padding: '10px 14px', border: '1px solid var(--border)', borderRadius: '6px', width: '100%', outline: 'none' }}
+                    placeholder="e.g. High user adoption, under budget"
+                    value={newWsSuccessMetrics}
+                    onChange={(e) => setNewWsSuccessMetrics(e.target.value)}
+                  />
+                </div>
+                <div className="auth-input-group">
+                  <label>Decision Points</label>
+                  <input
+                    type="text"
+                    style={{ padding: '10px 14px', border: '1px solid var(--border)', borderRadius: '6px', width: '100%', outline: 'none' }}
+                    placeholder="e.g. Cost, Integration, Support"
+                    value={newWsDecisionPoints}
+                    onChange={(e) => setNewWsDecisionPoints(e.target.value)}
                   />
                 </div>
               </div>

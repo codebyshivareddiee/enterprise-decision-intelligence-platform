@@ -9,7 +9,9 @@ import jinja2
 from app.agents.planner.exceptions import PlanGenerationError
 from app.agents.planner.schemas import ExecutionPlan
 from app.ai.manager import AIManager
+import structlog
 
+logger = structlog.get_logger(__name__)
 
 class Planner:
     """The Planner Agent is the intelligence layer of the workflow.
@@ -69,6 +71,13 @@ class Planner:
             ),
         )
 
+        logger.info(
+            "planner.generate_plan.start",
+            user_request=user_request,
+            workspace_decision_context=workspace_decision_context,
+            enabled_agents=enabled_agents
+        )
+
         try:
             # The AIManager automatically handles schema enforcement via OpenAI structured outputs
             plan = await self.ai_manager.generate(
@@ -82,6 +91,8 @@ class Planner:
                 raise PlanGenerationError(
                     "AIManager returned an invalid type, expected ExecutionPlan."
                 )
+
+            logger.info("planner.generate_plan.success", plan=plan.model_dump())
 
             return plan
 

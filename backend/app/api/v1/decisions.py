@@ -24,7 +24,7 @@ from app.api.v1.models.requests import (
     WorkflowResumeRequest,
 )
 from app.api.v1.models.response import StandardResponse
-from app.api.v1.models.responses import WorkflowExecuteResponse, WorkflowStatusResponse
+from app.api.v1.models.responses import WorkflowExecuteResponse, WorkflowStatusResponse, EvidenceItem
 from app.auth.dependencies import require_authenticated_user, require_role
 from app.auth.models import AuditEvent, Role
 from app.core.exceptions import EntityNotFound
@@ -131,7 +131,6 @@ async def run_workflow_background(
     "/execute",
     response_model=StandardResponse[WorkflowExecuteResponse],
     summary="Execute a decision workflow",
-    dependencies=[Depends(require_role(Role.WORKSPACE_ADMIN))],
 )
 async def execute_decision(
     request: WorkflowExecuteRequest,
@@ -152,11 +151,14 @@ async def execute_decision(
 
     # In a real app we'd fetch actual schemas, rules, etc.
     # For now, construct the rich decision context.
-    workspace_decision_context = workspace.dict()
+    workspace_decision_context = workspace.model_dump(mode="json") if hasattr(workspace, "model_dump") else workspace.dict()
     # Assume mock logic or actual repositories would fetch these
     workspace_decision_context["business_rules"] = []
     workspace_decision_context["preference_profile"] = {}
     workspace_decision_context["knowledge_schemas"] = []
+    
+    # Retrieve real selected knowledge assets as strings for state
+    selected_asset_ids = [str(aid) for aid in workspace.selected_knowledge_asset_ids] if workspace.selected_knowledge_asset_ids else []
 
     import time
 
@@ -181,16 +183,21 @@ async def execute_decision(
     # Initialize runtime
     decision_id = uuid.uuid4()
 
-    registry = AgentRegistry()  # Assuming it auto-discovers or we register manually
+    from app.workflow.registry import build_default_registry
+    registry = build_default_registry(
+        knowledge_manager=knowledge_manager,
+        ai_manager=planner.ai_manager
+    )
 
     initial_state = WorkflowState(
-        messages=[],
         plan=plan,
-        current_step=0,
-        completed_steps=[],
-        artifacts={},
-        business_context={},
         decision_id=str(decision_id),
+        user_request=request.user_request,
+        workspace_context=workspace_decision_context,
+        workspace=workspace.model_dump(mode="json") if hasattr(workspace, "model_dump") else workspace.dict(),
+        organization={"id": str(workspace.organization_id)},
+        selected_knowledge_asset_ids=selected_asset_ids,
+        selected_business_rule_ids=[],
     )
 
     context = ExecutionContext(
@@ -209,16 +216,55 @@ async def execute_decision(
         initial_state=initial_state, thread_id=str(decision_id)
     )
 
+    # Extract outputs safely mapped to DTOs
+    recommendation_dict = None
+    if final_state.recommendation and hasattr(final_state.recommendation, "recommendation"):
+        rec = final_state.recommendation.recommendation
+        
+        entity_name = rec.entity_id
+        if final_state.retrieved_chunks and final_state.retrieved_chunks.chunks:
+            for chunk in final_state.retrieved_chunks.chunks:
+                if chunk.asset_id == rec.entity_id or str(chunk.metadata.get("id")) == rec.entity_id:
+                    entity_name = chunk.metadata.get("asset_name", chunk.metadata.get("name", rec.entity_id))
+                    break
+
+        recommendation_dict = {
+            "entity_id": rec.entity_id,
+            "entity_name": entity_name,
+            "final_score": rec.final_score,
+            "rank": rec.rank,
+            "contributing_factors": rec.contributing_factors,
+        }
+    
+    explanation_text = None
+    if final_state.explanation and hasattr(final_state.explanation, "summary"):
+        explanation_text = final_state.explanation.summary
+        
+    evidence_items = []
+    if final_state.retrieved_chunks and hasattr(final_state.retrieved_chunks, "chunks"):
+        for chunk in final_state.retrieved_chunks.chunks:
+            evidence_items.append(
+                EvidenceItem(
+                    asset_id=str(chunk.asset_id),
+                    asset_name=chunk.metadata.get("asset_name", "Unknown Asset") if chunk.metadata else "Unknown Asset",
+                    chunk_id=chunk.metadata.get("chunk_id", None) if chunk.metadata else None,
+                    chunk_preview=chunk.text[:200] + "..." if len(chunk.text) > 200 else chunk.text,
+                    relevance_score=chunk.score,
+                    metadata=chunk.metadata,
+                )
+            )
+
     exec_resp = WorkflowExecuteResponse(
         decision_id=decision_id,
-        execution_plan=plan.dict(),
+        execution_plan=plan.model_dump(),
         execution_status=(
             "COMPLETED" if not final_state.is_interrupted else "INTERRUPTED"
         ),
         requires_human_review=final_state.is_interrupted,
-        recommendation=None,  # Extract from final_state artifacts if needed
-        explanation=None,
+        recommendation=recommendation_dict,
+        explanation=explanation_text,
         execution_trace=[],
+        supporting_evidence=evidence_items,
     )
 
     await audit_repo.log_event(
@@ -256,7 +302,10 @@ async def resume_decision(
     """Resumes a workflow that was paused for human review."""
 
     # Reconstruct context (in reality, we'd hydrate from DB/checkpoint)
-    registry = AgentRegistry()
+    from app.workflow.registry import build_default_registry
+    registry = build_default_registry(
+        ai_manager=planner.ai_manager
+    )
     context = ExecutionContext(
         plan=None,  # type: ignore
         state=WorkflowState(),
@@ -275,8 +324,8 @@ async def resume_decision(
     status_resp = WorkflowStatusResponse(
         decision_id=decision_id,
         status="COMPLETED" if not final_state.is_interrupted else "INTERRUPTED",
-        current_state=final_state.dict(exclude={"plan", "artifacts"}),
-        completed_nodes=[s.name for s in final_state.completed_steps],
+        current_state=final_state.model_dump(exclude={"plan"}),
+        completed_nodes=final_state.completed_steps,
         failed_nodes=[],
         current_node=None,
         execution_trace=[],

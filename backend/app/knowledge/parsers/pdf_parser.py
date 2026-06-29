@@ -1,71 +1,121 @@
 """PDF document parser."""
 
+import logging
+import re
+
+from pypdf import PdfReader
+
 from app.knowledge.exceptions import ParsingError
 from app.knowledge.interfaces.parser import DocumentParser
 from app.knowledge.parsers.models import ParsedDocument
 from app.models.knowledge_asset import KnowledgeAsset
+
+logger = logging.getLogger(__name__)
+
+# PDFs yielding fewer characters than this are rejected as unreadable
+# (likely scanned/image-only documents).
+MIN_EXTRACTED_TEXT_LENGTH = 50
 
 
 class PdfParser(DocumentParser):
     """Parses PDF KnowledgeAssets using pypdf."""
 
     async def parse(self, asset: KnowledgeAsset) -> ParsedDocument:
-        """Parse a PDF KnowledgeAsset.
+        """Parse a PDF KnowledgeAsset by extracting text with pypdf.
+
+        Reads from ``asset.file_path`` (a temp file written by the upload
+        endpoint). Validates that meaningful text was extracted before
+        returning.
 
         Args:
-            asset: The PDF KnowledgeAsset.
+            asset: The PDF KnowledgeAsset. Must have ``file_path`` set to
+                   a readable PDF file on disk.
 
         Returns:
-            The extracted ParsedDocument.
+            The extracted ParsedDocument containing readable text.
 
         Raises:
-            ParsingError: If parsing fails.
+            ParsingError: If the file cannot be read, pypdf fails, or the
+                          PDF yields no meaningful text.
         """
         try:
-            # For hackathon purposes, we assume `asset.raw_content` might contain
-            # the base64 or raw bytes, OR we just return a placeholder if not.
-            # In a real system, we'd fetch the file from S3 using `asset.file_path`.
+            if not asset.file_path:
+                raise ParsingError(
+                    f"No file_path for PDF asset {asset.id}. "
+                    f"PDF files must be uploaded as binary files."
+                )
 
-            text = ""
-            if (
-                asset.raw_content
-                and isinstance(asset.raw_content, str)
-                and not asset.raw_content.startswith("%PDF")
-            ):
-                text = asset.raw_content
-            else:
-                if not asset.file_path and not asset.raw_content:
-                    raise ParsingError(
-                        f"No file_path or raw_content for PDF asset {asset.id}"
-                    )
-                text = str(asset.raw_content) if asset.raw_content else ""
+            # ----------------------------------------------------------
+            # 1. Extract text from every page using pypdf
+            # ----------------------------------------------------------
+            reader = PdfReader(asset.file_path)
 
-            char_count = len(text)
-            word_count = len(text.split())
+            pages_text: list[str] = []
+            for page in reader.pages:
+                page_text = page.extract_text() or ""
+                pages_text.append(page_text)
 
-            # Since we simulate PDF, we'll pretend it has pages by splitting roughly every 3000 chars
-            page_size = 3000
-            page_count = max(1, char_count // page_size)
+            full_text = "\n\n".join(pages_text)
 
-            sampled_pages = {}
+            # ----------------------------------------------------------
+            # 2. Normalize whitespace
+            # ----------------------------------------------------------
+            # Collapse horizontal whitespace runs (spaces/tabs) into a
+            # single space, but preserve intentional line breaks.
+            full_text = re.sub(r"[ \t]+", " ", full_text)
+            # Collapse 3+ consecutive newlines into exactly 2
+            full_text = re.sub(r"\n{3,}", "\n\n", full_text)
+            full_text = full_text.strip()
+
+            # ----------------------------------------------------------
+            # 3. Validate extracted text quality
+            # ----------------------------------------------------------
+            if len(full_text) < MIN_EXTRACTED_TEXT_LENGTH:
+                raise ParsingError(
+                    f"PDF asset {asset.id} yielded only {len(full_text)} "
+                    f"characters of text. The PDF may be scanned or "
+                    f"image-only. Minimum required: "
+                    f"{MIN_EXTRACTED_TEXT_LENGTH} characters."
+                )
+
+            # ----------------------------------------------------------
+            # 4. Verification logging
+            # ----------------------------------------------------------
+            logger.info(
+                "pdf_text_extracted | asset_id=%s | text_length=%d | "
+                "first_500_chars=%.500s",
+                asset.id,
+                len(full_text),
+                full_text[:500],
+            )
+
+            # ----------------------------------------------------------
+            # 5. Build document statistics
+            # ----------------------------------------------------------
+            char_count = len(full_text)
+            word_count = len(full_text.split())
+            page_count = len(reader.pages)
+
+            # Sampled pages: first, middle, last (or all if ≤ 3 pages)
+            sampled_pages: dict[int, str] = {}
             if page_count > 3:
-                sampled_pages[1] = text[:page_size]
-                sampled_pages[page_count // 2] = text[
-                    (page_count // 2) * page_size : (page_count // 2 + 1) * page_size
-                ]
-                sampled_pages[page_count] = text[-page_size:]
+                sampled_pages[1] = pages_text[0].strip()
+                mid = page_count // 2
+                sampled_pages[mid + 1] = pages_text[mid].strip()
+                sampled_pages[page_count] = pages_text[-1].strip()
             else:
-                for i in range(page_count):
-                    sampled_pages[i + 1] = text[i * page_size : (i + 1) * page_size]
+                for i, pt in enumerate(pages_text):
+                    sampled_pages[i + 1] = pt.strip()
 
-            headings = []
-            for line in text.split("\n"):
+            # Detect headings: lines that are ALL CAPS and short
+            headings: list[str] = []
+            for line in full_text.split("\n"):
                 line = line.strip()
-                if line.isupper() and 3 < len(line) < 60:
+                if line and line.isupper() and 3 < len(line) < 60:
                     headings.append(line)
 
             return ParsedDocument(
-                text=text,
+                text=full_text,
                 filename=f"{asset.name}.pdf",
                 extension="pdf",
                 page_count=page_count,
@@ -77,5 +127,9 @@ class PdfParser(DocumentParser):
                 sampled_pages=sampled_pages,
             )
 
+        except ParsingError:
+            raise
         except Exception as e:
-            raise ParsingError(f"Failed to parse PDF asset {asset.id}: {str(e)}") from e
+            raise ParsingError(
+                f"Failed to parse PDF asset {asset.id}: {str(e)}"
+            ) from e

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Shield, PlusCircle, AlertCircle, Trash2, Key, Users, Settings as SettingsIcon } from 'lucide-react';
 import { api } from '../services/api';
+import { toast } from 'sonner';
 
 export default function Settings({ workspace, user }) {
   const [activePane, setActivePane] = useState('profile');
@@ -26,8 +27,12 @@ export default function Settings({ workspace, user }) {
 
   const loadRules = async () => {
     setLoading(true);
-    const fetched = await api.getRules(workspace.id);
-    setRules(fetched);
+    try {
+      const fetched = await api.getRules(workspace.id);
+      setRules(fetched);
+    } catch (err) {
+      toast.error('Failed to load rules.');
+    }
     setLoading(false);
   };
 
@@ -36,7 +41,7 @@ export default function Settings({ workspace, user }) {
     if (!oldPassword || !newPassword) return;
     
     // Simulate change password
-    alert('Password updated successfully!');
+    toast.success('Password updated successfully!');
     setOldPassword('');
     setNewPassword('');
   };
@@ -45,17 +50,22 @@ export default function Settings({ workspace, user }) {
     e.preventDefault();
     if (!ruleName.trim()) return;
 
-    const orgId = user.organization_ids?.[0];
-    await api.createRule(workspace.id, orgId, {
-      name: ruleName,
-      type: ruleType,
-      priority: parseInt(rulePriority),
-      details: ruleDetails
-    });
+    try {
+      const orgId = user.organization_ids?.[0];
+      await api.createRule(workspace.id, orgId, {
+        name: ruleName,
+        type: ruleType,
+        priority: parseInt(rulePriority),
+        details: ruleDetails
+      });
 
-    setRuleName('');
-    setRuleDetails('');
-    loadRules();
+      setRuleName('');
+      setRuleDetails('');
+      toast.success('Rule created successfully!');
+      loadRules();
+    } catch (err) {
+      toast.error('Failed to create rule.');
+    }
   };
 
   return (

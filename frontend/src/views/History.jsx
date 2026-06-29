@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Clock, CheckSquare, Award, UserCheck, MessageSquare } from 'lucide-react';
 import { api } from '../services/api';
+import { toast } from 'sonner';
 
 export default function History({ workspace }) {
   const [decisions, setDecisions] = useState([]);
@@ -14,9 +15,12 @@ export default function History({ workspace }) {
 
   const loadHistory = async () => {
     setLoading(true);
-    const fetched = await api.getDecisions(workspace.id);
-    // Filter completed ones
-    setDecisions(fetched.filter(d => d.status !== 'pending'));
+    try {
+      const fetched = await api.getDecisions(workspace.id);
+      setDecisions(fetched.filter(d => d.status !== 'pending'));
+    } catch (err) {
+      toast.error('Failed to load history.');
+    }
     setLoading(false);
   };
 

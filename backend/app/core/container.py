@@ -32,6 +32,9 @@ from app.persistence.mongodb.repositories.user_repository import UserRepository
 from app.persistence.mongodb.repositories.workspace_repository import (
     WorkspaceRepository,
 )
+from app.persistence.mongodb.repositories.recommendation_repository import (
+    RecommendationRepository,
+)
 
 
 class ServiceContainer:
@@ -55,6 +58,7 @@ class ServiceContainer:
         self.business_rule_repo = BusinessRuleRepository(self.db)
         self.audit_repo = AuditRepository(self.db)
         self.user_repo = UserRepository(self.db)
+        self.recommendation_repo = RecommendationRepository(self.db)
         # AI
         self.ai_provider = OpenAIProvider()
         self.ai_manager = AIManager(provider=self.ai_provider)

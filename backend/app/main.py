@@ -1,5 +1,9 @@
 """Enterprise Decision Intelligence Platform — FastAPI application entry point."""
 
+from dotenv import load_dotenv
+
+load_dotenv()
+
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 

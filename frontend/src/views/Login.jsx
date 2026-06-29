@@ -1,11 +1,16 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Mail, Lock, User, Eye, EyeOff, Building2, Shield, ArrowRight } from 'lucide-react';
 import { api } from '../services/api';
+import { useAuth } from '../context/AuthContext';
+import { toast } from 'sonner';
 
-export default function Login({ onLoginSuccess }) {
+export default function Login() {
   const [isSignUp, setIsSignUp] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const { login } = useAuth();
+  const navigate = useNavigate();
   
   // Fields
   const [firstName, setFirstName] = useState('');
@@ -34,34 +39,37 @@ export default function Login({ onLoginSuccess }) {
         return;
       }
 
-      const regRes = await api.register(email, password, `${firstName} ${lastName}`, companyName);
-      if (!regRes.success) {
-        setError(regRes.message || 'Registration failed.');
-        setLoading(false);
-        return;
+      try {
+        const regRes = await api.register(email, password, `${firstName} ${lastName}`, companyName);
+        if (regRes.success || regRes.id) { // Hack to handle different success shapes
+          toast.success("Registration successful");
+          const success = await login(email, password);
+          if (success) navigate('/');
+        } else {
+          setError(regRes.message || 'Registration failed.');
+        }
+      } catch (err) {
+        setError(err.response?.data?.detail || 'Registration failed. Please try again.');
       }
-      
-      // Auto login on signup success
-      const user = await api.login(email, password);
-      onLoginSuccess(user);
     } else {
       if (!email || !password) {
         setError('Please enter your email and password.');
         setLoading(false);
         return;
       }
-      const user = await api.login(email, password);
-      if (user) {
-        onLoginSuccess(user);
-      } else {
-        setError('Invalid email or password.');
+      try {
+        const success = await login(email, password);
+        if (success) {
+          navigate('/');
+        } else {
+          setError('Invalid email or password.');
+        }
+      } catch (err) {
+        setError(err.response?.data?.detail || 'Invalid email or password.');
       }
     }
     setLoading(false);
   };
-
-
-
   return (
     <div className="auth-page">
       {/* Left Sidebar Branding Panel */}

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { FileText, Plus, Check, X, Cpu, Layers, HelpCircle } from 'lucide-react';
 import { api } from '../services/api';
+import { toast } from 'sonner';
 
 export default function Knowledge({ workspace, user, onUpdateWorkspace }) {
   const [assets, setAssets] = useState([]);
@@ -20,18 +21,22 @@ export default function Knowledge({ workspace, user, onUpdateWorkspace }) {
 
   const loadKnowledgeAssets = async () => {
     setLoading(true);
-    const fetchedAssets = await api.getKnowledgeAssets();
-    setAssets(fetchedAssets);
-    
-    // Select first workspace asset by default if it exists
-    const wsAssets = workspace
-      ? fetchedAssets.filter(asset => workspace.selected_knowledge_asset_ids?.includes(asset.id))
-      : [];
+    try {
+      const fetchedAssets = await api.getKnowledgeAssets();
+      setAssets(fetchedAssets);
       
-    if (wsAssets.length > 0) {
-      setSelectedAsset(wsAssets[0]);
-    } else {
-      setSelectedAsset(null);
+      // Select first workspace asset by default if it exists
+      const wsAssets = workspace
+        ? fetchedAssets.filter(asset => workspace.selected_knowledge_asset_ids?.includes(asset.id))
+        : [];
+        
+      if (wsAssets.length > 0) {
+        setSelectedAsset(wsAssets[0]);
+      } else {
+        setSelectedAsset(null);
+      }
+    } catch (err) {
+      toast.error('Failed to load knowledge assets.');
     }
     setLoading(false);
   };
@@ -39,28 +44,26 @@ export default function Knowledge({ workspace, user, onUpdateWorkspace }) {
   const handleImportAssets = async () => {
     if (selectedImportAssetIds.length === 0) return;
     
-    const currentSelectedIds = workspace.selected_knowledge_asset_ids || [];
-    // Combine current and new selections, keeping unique ids
-    const newIds = selectedImportAssetIds.filter(id => !currentSelectedIds.includes(id));
-    const updatedIds = [...currentSelectedIds, ...newIds];
-    
-    const updatedWorkspace = await api.updateWorkspace(workspace.id, {
-      ...workspace,
-      selected_knowledge_asset_ids: updatedIds
-    });
-    
-    if (updatedWorkspace) {
-      if (onUpdateWorkspace) {
-        onUpdateWorkspace(updatedWorkspace);
-      }
-      setShowImportModal(false);
-      setSelectedImportAssetIds([]);
+    try {
+      const updatedWorkspace = await api.importKnowledgeToWorkspace(workspace.id, selectedImportAssetIds);
       
-      // Auto-select the first imported asset if nothing was selected before
-      const wsAssets = assets.filter(asset => updatedIds.includes(asset.id));
-      if (wsAssets.length > 0 && !selectedAsset) {
-        setSelectedAsset(wsAssets[0]);
+      if (updatedWorkspace) {
+        if (onUpdateWorkspace) {
+          onUpdateWorkspace(updatedWorkspace);
+        }
+        setShowImportModal(false);
+        const importedCount = selectedImportAssetIds.length;
+        setSelectedImportAssetIds([]);
+        toast.success(`${importedCount} knowledge asset${importedCount === 1 ? '' : 's'} imported successfully.`);
+        
+        // Auto-select the first imported asset if nothing was selected before
+        const wsAssets = assets.filter(asset => updatedWorkspace.selected_knowledge_asset_ids?.includes(asset.id));
+        if (wsAssets.length > 0 && !selectedAsset) {
+          setSelectedAsset(wsAssets[0]);
+        }
       }
+    } catch (err) {
+      toast.error(err.response?.data?.message || err.response?.data?.detail || 'Failed to import documents.');
     }
   };
 
