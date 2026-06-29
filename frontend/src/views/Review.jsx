@@ -54,7 +54,7 @@ export default function Review({ workspace, decisionId, onBackToDashboard, onVie
       <div className="review-top-banner">
         <div className="review-top-banner-left">
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--text-muted)', fontSize: '12px', marginBottom: '8px', cursor: 'pointer' }} onClick={onBackToDashboard}>
-            <ChevronLeft size={14} /> Back to Decisions
+            <ChevronLeft size={14} /> Back to Home
           </div>
           <h1>Decision Review</h1>
           <p>Review the AI's recommendation with full context and evidence.</p>

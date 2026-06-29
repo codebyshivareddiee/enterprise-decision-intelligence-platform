@@ -1,95 +1,85 @@
 import React, { useState, useEffect } from 'react';
-import { FileText, Upload, Plus, Check, ChevronRight, X, Shield, Cpu, Layers, HelpCircle, HardDrive } from 'lucide-react';
+import { FileText, Plus, Check, X, Cpu, Layers, HelpCircle } from 'lucide-react';
 import { api } from '../services/api';
 
-export default function Knowledge({ workspace, user, triggerOpenUpload, onCloseUploadTrigger }) {
+export default function Knowledge({ workspace, user, onUpdateWorkspace }) {
   const [assets, setAssets] = useState([]);
   const [selectedAsset, setSelectedAsset] = useState(null);
   const [activeDrawerTab, setActiveDrawerTab] = useState('details');
-  const [showUploadWizard, setShowUploadWizard] = useState(false);
+  const [showImportModal, setShowImportModal] = useState(false);
+  const [selectedImportAssetIds, setSelectedImportAssetIds] = useState([]);
   const [loading, setLoading] = useState(false);
-
-  // Upload States
-  const [uploadFile, setUploadFile] = useState(null);
-  const [description, setDescription] = useState('');
-  const [analyzing, setAnalyzing] = useState(false);
-  const [analysisResult, setAnalysisResult] = useState(null);
 
   // Filter States
   const [filterDoc, setFilterDoc] = useState('all');
-  const [filterWorkspace, setFilterWorkspace] = useState('all');
   const [filterType, setFilterType] = useState('all');
 
   useEffect(() => {
     loadKnowledgeAssets();
   }, [workspace?.id]);
 
-  useEffect(() => {
-    if (triggerOpenUpload) {
-      setShowUploadWizard(true);
-      if (onCloseUploadTrigger) onCloseUploadTrigger();
-    }
-  }, [triggerOpenUpload]);
-
   const loadKnowledgeAssets = async () => {
     setLoading(true);
     const fetchedAssets = await api.getKnowledgeAssets();
     setAssets(fetchedAssets);
-    if (fetchedAssets.length > 0) {
-      setSelectedAsset(fetchedAssets[0]); // default select first card
+    
+    // Select first workspace asset by default if it exists
+    const wsAssets = workspace
+      ? fetchedAssets.filter(asset => workspace.selected_knowledge_asset_ids?.includes(asset.id))
+      : [];
+      
+    if (wsAssets.length > 0) {
+      setSelectedAsset(wsAssets[0]);
+    } else {
+      setSelectedAsset(null);
     }
     setLoading(false);
   };
 
-  const handleFileChange = (e) => {
-    if (e.target.files && e.target.files[0]) {
-      setUploadFile(e.target.files[0]);
+  const handleImportAssets = async () => {
+    if (selectedImportAssetIds.length === 0) return;
+    
+    const currentSelectedIds = workspace.selected_knowledge_asset_ids || [];
+    // Combine current and new selections, keeping unique ids
+    const newIds = selectedImportAssetIds.filter(id => !currentSelectedIds.includes(id));
+    const updatedIds = [...currentSelectedIds, ...newIds];
+    
+    const updatedWorkspace = await api.updateWorkspace(workspace.id, {
+      ...workspace,
+      selected_knowledge_asset_ids: updatedIds
+    });
+    
+    if (updatedWorkspace) {
+      if (onUpdateWorkspace) {
+        onUpdateWorkspace(updatedWorkspace);
+      }
+      setShowImportModal(false);
+      setSelectedImportAssetIds([]);
+      
+      // Auto-select the first imported asset if nothing was selected before
+      const wsAssets = assets.filter(asset => updatedIds.includes(asset.id));
+      if (wsAssets.length > 0 && !selectedAsset) {
+        setSelectedAsset(wsAssets[0]);
+      }
     }
   };
 
-  const handleAnalyzeDocument = async (e) => {
-    e.preventDefault();
-    if (!uploadFile) return;
+  // Derive workspace-specific assets
+  const workspaceAssets = workspace
+    ? assets.filter(asset => workspace.selected_knowledge_asset_ids?.includes(asset.id))
+    : [];
 
-    setAnalyzing(true);
-    // Call upload API which runs indexing and analysis
-    const orgId = user.organization_ids?.[0];
-    const result = await api.uploadKnowledge(workspace?.id || 'ws1-uuid-0001', orgId, description, uploadFile);
-    setAnalysisResult(result);
-    setAnalyzing(false);
-  };
-
-  const handleAddToKnowledge = () => {
-    if (!analysisResult) return;
-    
-    // Construct new asset card
-    const newAsset = {
-      id: analysisResult.asset_id,
-      name: uploadFile.name,
-      content_type: uploadFile.name.endsWith('.pdf') ? 'pdf' : 'text',
-      user_description: description,
-      status: 'ready',
-      created_at: new Date().toISOString(),
-      size: `${(uploadFile.size / (1024 * 1024)).toFixed(1)} MB`,
-      confidence: analysisResult.confidence,
-      processing_metadata: {
-        chunking_strategy: analysisResult.chunking_strategy,
-        chunk_profile: analysisResult.chunk_profile,
-        reasoning: analysisResult.processing_reasoning,
-        selection_method: analysisResult.selection_method,
-        schema_selected: analysisResult.schema_selected
-      }
-    };
-    
-    setAssets(prev => [newAsset, ...prev]);
-    setSelectedAsset(newAsset);
-    
-    // Reset Upload Flow
-    setUploadFile(null);
-    setDescription('');
-    setAnalysisResult(null);
-    setShowUploadWizard(false);
-  };
+  // Apply filters
+  const filteredWorkspaceAssets = workspaceAssets.filter(asset => {
+    if (filterDoc !== 'all') {
+      if (filterDoc === 'pdf' && asset.content_type !== 'pdf') return false;
+      if (filterDoc === 'text' && asset.content_type !== 'text') return false;
+    }
+    if (filterType !== 'all') {
+      if (filterType === 'schemas' && !asset.processing_metadata?.schema_selected) return false;
+    }
+    return true;
+  });
 
   return (
     <div style={{ display: 'flex', flex: 1, width: '100%' }}>
@@ -101,12 +91,9 @@ export default function Knowledge({ workspace, user, triggerOpenUpload, onCloseU
             <p>Manage and organize your organization's knowledge assets.</p>
           </div>
           <div className="knowledge-actions-wrapper">
-            <button className="btn btn-primary" onClick={() => setShowUploadWizard(true)}>
-              <Upload size={16} />
-              <span>Upload Document</span>
-            </button>
-            <button className="btn btn-secondary btn-sm">
+            <button className="btn btn-primary" onClick={() => { setSelectedImportAssetIds([]); setShowImportModal(true); }}>
               <Plus size={16} />
+              <span>Import Document</span>
             </button>
           </div>
         </div>
@@ -118,10 +105,6 @@ export default function Knowledge({ workspace, user, triggerOpenUpload, onCloseU
             <option value="pdf">PDFs only</option>
             <option value="text">Texts only</option>
           </select>
-          <select className="filter-select" value={filterWorkspace} onChange={e => setFilterWorkspace(e.target.value)}>
-            <option value="all">All Workspaces</option>
-            <option value="current">Current Workspace</option>
-          </select>
           <select className="filter-select" value={filterType} onChange={e => setFilterType(e.target.value)}>
             <option value="all">All Types</option>
             <option value="schemas">Schemas only</option>
@@ -132,48 +115,55 @@ export default function Knowledge({ workspace, user, triggerOpenUpload, onCloseU
         {loading ? (
           <div style={{ textAlign: 'center', padding: '48px', color: 'var(--text-muted)' }}>Loading knowledge assets...</div>
         ) : (
-          <div className="knowledge-grid">
-            {assets.map((asset) => {
-              const meta = asset.processing_metadata || {};
-              const isSelected = selectedAsset?.id === asset.id;
-              return (
-                <div
-                  key={asset.id}
-                  className={`knowledge-card ${isSelected ? 'selected' : ''}`}
-                  onClick={() => setSelectedAsset(asset)}
-                >
-                  {isSelected && (
-                    <div className="knowledge-card-check">
-                      <Check size={12} strokeWidth={3} />
+          <>
+            <div className="knowledge-grid">
+              {filteredWorkspaceAssets.map((asset) => {
+                const meta = asset.processing_metadata || {};
+                const isSelected = selectedAsset?.id === asset.id;
+                return (
+                  <div
+                    key={asset.id}
+                    className={`knowledge-card ${isSelected ? 'selected' : ''}`}
+                    onClick={() => setSelectedAsset(asset)}
+                  >
+                    {isSelected && (
+                      <div className="knowledge-card-check">
+                        <Check size={12} strokeWidth={3} />
+                      </div>
+                    )}
+                    <div className="knowledge-card-header">
+                      <div className="knowledge-file-icon">
+                        <FileText size={22} />
+                      </div>
                     </div>
-                  )}
-                  <div className="knowledge-card-header">
-                    <div className="knowledge-file-icon">
-                      <FileText size={22} />
-                    </div>
-                  </div>
-                  <h4>{asset.name}</h4>
-                  <p className="meta">{asset.size || '1.2 MB'} • Uploaded {asset.created_at ? new Date(asset.created_at).toLocaleDateString() : 'recently'}</p>
-                  
-                  <div className="knowledge-card-pills">
-                    <div className="card-pill chunking">
-                      <Layers size={12} />
-                      <span>{meta.chunking_strategy || 'Default Chunker'}</span>
-                    </div>
-                    <div className="card-pill analyzer">
-                      <Cpu size={12} />
-                      <span>{meta.selection_method || 'AI Analysis'}</span>
-                    </div>
-                  </div>
+                    <h4>{asset.name}</h4>
+                    <p className="meta">{asset.size || '1.2 MB'} • Uploaded {asset.created_at ? new Date(asset.created_at).toLocaleDateString() : 'recently'}</p>
 
-                  <div className="knowledge-card-footer">
-                    <span>Confidence</span>
-                    <span className="knowledge-confidence-badge">{asset.confidence || 90}%</span>
+                    <div className="knowledge-card-pills">
+                      <div className="card-pill chunking">
+                        <Layers size={12} />
+                        <span>{meta.chunking_strategy || 'Default Chunker'}</span>
+                      </div>
+                      <div className="card-pill analyzer">
+                        <Cpu size={12} />
+                        <span>{meta.selection_method || 'AI Analysis'}</span>
+                      </div>
+                    </div>
+
+                    <div className="knowledge-card-footer">
+                      <span>Confidence</span>
+                      <span className="knowledge-confidence-badge">{asset.confidence || 90}%</span>
+                    </div>
                   </div>
-                </div>
-              );
-            })}
-          </div>
+                );
+              })}
+            </div>
+            {filteredWorkspaceAssets.length === 0 && (
+              <div style={{ textAlign: 'center', padding: '48px', border: '1px dashed var(--border)', borderRadius: '8px', backgroundColor: 'var(--bg-card)', color: 'var(--text-muted)' }}>
+                No documents imported in this workspace. Click "Import Document" to select from the global library.
+              </div>
+            )}
+          </>
         )}
       </div>
 
@@ -193,7 +183,7 @@ export default function Knowledge({ workspace, user, triggerOpenUpload, onCloseU
             </div>
             <div className="drawer-file-meta-text">
               <h3>{selectedAsset.name}</h3>
-              <p>{selectedAsset.size} • PDF Document</p>
+              <p>{selectedAsset.size || '1.2 MB'} • PDF Document</p>
             </div>
           </div>
 
@@ -296,144 +286,94 @@ export default function Knowledge({ workspace, user, triggerOpenUpload, onCloseU
             )}
             {activeDrawerTab === 'activity' && (
               <div style={{ color: 'var(--text-muted)', fontSize: '13px' }}>
-                <p>• Document uploaded by Alex Johnson on {selectedAsset.created_at ? new Date(selectedAsset.created_at).toLocaleDateString() : 'recent'}</p>
+                <p>• Document uploaded on {selectedAsset.created_at ? new Date(selectedAsset.created_at).toLocaleDateString() : 'recent'}</p>
                 <p style={{ marginTop: '8px' }}>• Chunked into vector points in Qdrant store</p>
-                <p style={{ marginTop: '8px' }}>• Selected into active workspaces (Acme Corporation, IT & Security)</p>
+                <p style={{ marginTop: '8px' }}>• Selected into active workspaces ({workspace?.name})</p>
               </div>
             )}
           </div>
         </div>
       )}
 
-      {/* Interactive upload wizard modal */}
-      {showUploadWizard && (
-        <div className="modal-overlay" onClick={() => { if (!analyzing) setShowUploadWizard(false); }}>
-          <div className="modal-card" style={{ maxWidth: '960px', display: 'flex', flexDirection: 'column' }} onClick={e => e.stopPropagation()}>
+      {/* Import Document Modal */}
+      {showImportModal && (
+        <div className="modal-overlay" onClick={() => setShowImportModal(false)}>
+          <div className="modal-card" style={{ maxWidth: '600px' }} onClick={e => e.stopPropagation()}>
             <div className="modal-header">
-              <h3 style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <HardDrive size={18} /> Upload Document
-              </h3>
-              <button style={{ background: 'none', border: 'none', cursor: 'pointer' }} onClick={() => setShowUploadWizard(false)}>✕</button>
+              <h3>Import Document to Workspace</h3>
+              <button style={{ background: 'none', border: 'none', cursor: 'pointer' }} onClick={() => setShowImportModal(false)}>✕</button>
             </div>
-
-            <div className="modal-body" style={{ padding: '32px' }}>
-              <div className="wizard-container">
-                {/* Left Panel forms */}
-                <div className="wizard-left-panel">
-                  <div className="wizard-step-card">
-                    <div className="wizard-step-header">
-                      <div className="wizard-step-number">1</div>
-                      <h3>Upload Document</h3>
-                    </div>
-
-                    {!uploadFile ? (
-                      <label className="drag-drop-zone">
-                        <Upload size={32} style={{ color: 'var(--primary)' }} />
-                        <p><strong>Drag & drop your file here</strong></p>
-                        <p className="file-types">or <span style={{ color: 'var(--primary)', fontWeight: 600 }}>Browse Files</span></p>
-                        <p className="file-types" style={{ color: 'var(--text-muted)' }}>Supports PDF, DOCX, TXT • Max size: 50MB</p>
-                        <input type="file" style={{ display: 'none' }} accept=".pdf,.docx,.txt" onChange={handleFileChange} />
-                      </label>
-                    ) : (
-                      <div className="uploaded-file-row">
-                        <div className="uploaded-file-left">
-                          <FileText size={20} style={{ color: '#ef4444' }} />
-                          <div>
-                            <strong style={{ fontSize: '13px', wordBreak: 'break-all' }}>{uploadFile.name}</strong>
-                            <p style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{(uploadFile.size / (1024 * 1024)).toFixed(2)} MB</p>
+            <div className="modal-body" style={{ padding: '24px' }}>
+              <p style={{ color: 'var(--text-muted)', fontSize: '13px', marginBottom: '16px' }}>
+                Select documents from your organization's library to make them available for decisions in <strong>{workspace?.name}</strong>.
+              </p>
+              
+              <div style={{ maxHeight: '300px', overflowY: 'auto', border: '1px solid var(--border)', borderRadius: '6px', backgroundColor: 'var(--bg-main)' }}>
+                {assets.filter(asset => !workspace?.selected_knowledge_asset_ids?.includes(asset.id)).length === 0 ? (
+                  <div style={{ padding: '24px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '13px' }}>
+                    No new documents available to import. Upload them globally first!
+                  </div>
+                ) : (
+                  assets
+                    .filter(asset => !workspace?.selected_knowledge_asset_ids?.includes(asset.id))
+                    .map(asset => {
+                      const isSelected = selectedImportAssetIds.includes(asset.id);
+                      return (
+                        <div
+                          key={asset.id}
+                          onClick={() => {
+                            if (isSelected) {
+                              setSelectedImportAssetIds(prev => prev.filter(id => id !== asset.id));
+                            } else {
+                              setSelectedImportAssetIds(prev => [...prev, asset.id]);
+                            }
+                          }}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            padding: '12px 16px',
+                            borderBottom: '1px solid var(--border)',
+                            cursor: 'pointer',
+                            backgroundColor: isSelected ? 'var(--primary-light)' : 'transparent',
+                            transition: 'background-color 0.2s'
+                          }}
+                        >
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                            <FileText size={18} style={{ color: isSelected ? 'var(--primary)' : 'var(--text-muted)' }} />
+                            <div>
+                              <strong style={{ fontSize: '13px', display: 'block', color: 'var(--text-main)' }}>{asset.name}</strong>
+                              <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{asset.size || '1.2 MB'} • {asset.content_type?.toUpperCase() || 'PDF'}</span>
+                            </div>
+                          </div>
+                          <div style={{
+                            width: '18px',
+                            height: '18px',
+                            borderRadius: '4px',
+                            border: '1.5px solid var(--border)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            backgroundColor: isSelected ? 'var(--primary)' : 'transparent',
+                            borderColor: isSelected ? 'var(--primary)' : 'var(--border)'
+                          }}>
+                            {isSelected && <Check size={12} strokeWidth={3} style={{ color: '#fff' }} />}
                           </div>
                         </div>
-                        <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)' }} onClick={() => { setUploadFile(null); setAnalysisResult(null); }}>
-                          <X size={16} />
-                        </button>
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="wizard-step-card">
-                    <div className="wizard-step-header">
-                      <div className="wizard-step-number">2</div>
-                      <h3>Describe this document in 2-3 lines</h3>
-                    </div>
-
-                    <textarea
-                      className="wizard-textarea"
-                      placeholder="This document describes our company's security compliance requirements."
-                      maxLength={300}
-                      value={description}
-                      onChange={e => setDescription(e.target.value)}
-                    />
-                    <div className="character-counter">{description.length}/300</div>
-                  </div>
-
-                  <button
-                    className="btn btn-primary"
-                    style={{ padding: '12px', width: '100%', height: '44px' }}
-                    onClick={handleAnalyzeDocument}
-                    disabled={!uploadFile || analyzing}
-                  >
-                    {analyzing ? 'Analyzing Document with AI...' : 'Analyze Document'}
-                  </button>
-                </div>
-
-                {/* Right Panel AI result */}
-                <div className="wizard-right-panel">
-                  <div>
-                    <div className="wizard-analysis-title">
-                      <Cpu size={18} />
-                      <h3>AI Analysis Result</h3>
-                    </div>
-                    <p className="wizard-analysis-subtitle">Our AI has analyzed your document and extracted key information.</p>
-
-                    {analysisResult ? (
-                      <div className="wizard-results-list">
-                        <div className="wizard-result-item">
-                          <span className="label">Knowledge Schema</span>
-                          <span className="wizard-result-pill purple">{analysisResult.schema_selected}</span>
-                        </div>
-                        <div className="wizard-result-item">
-                          <span className="label">Chunking Strategy</span>
-                          <span className="wizard-result-pill green">{analysisResult.chunking_strategy}</span>
-                        </div>
-                        <div className="wizard-result-item">
-                          <span className="label">Chunk Profile</span>
-                          <span className="wizard-result-pill blue">{analysisResult.chunk_profile}</span>
-                        </div>
-                        <div className="wizard-result-item">
-                          <span className="label">Selection Method</span>
-                          <span className="wizard-result-pill purple">{analysisResult.selection_method}</span>
-                        </div>
-                        <div className="wizard-result-item">
-                          <span className="label">Confidence</span>
-                          <span className="wizard-result-pill green">✓ {analysisResult.confidence}%</span>
-                        </div>
-                        
-                        <div className="wizard-reasoning-box">
-                          <HelpCircle size={16} style={{ color: 'var(--primary)', flexShrink: 0 }} />
-                          <div>
-                            <strong style={{ fontSize: '11px', display: 'block', marginBottom: '2px' }}>Reasoning</strong>
-                            <p>{analysisResult.processing_reasoning}</p>
-                          </div>
-                        </div>
-                      </div>
-                    ) : (
-                      <div style={{ textAlign: 'center', padding: '60px 20px', color: 'var(--text-muted)', border: '1px dashed var(--border)', borderRadius: '8px', backgroundColor: 'var(--bg-main)' }}>
-                        <Cpu size={24} style={{ marginBottom: '8px', opacity: 0.5 }} />
-                        <p style={{ fontSize: '12px' }}>Upload and analyze your document to view structured extraction parameters in real-time.</p>
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="wizard-actions-row">
-                    <button className="btn btn-secondary" onClick={() => alert('View chunks modal is currently in mock.')} disabled={!analysisResult}>
-                      View Chunks
-                    </button>
-                    <button className="btn btn-primary" onClick={handleAddToKnowledge} disabled={!analysisResult}>
-                      Add to Knowledge
-                    </button>
-                  </div>
-                </div>
+                      );
+                    })
+                )}
               </div>
+            </div>
+            <div className="modal-footer" style={{ borderTop: '1px solid var(--border)', padding: '16px 24px', display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
+              <button className="btn btn-secondary" onClick={() => setShowImportModal(false)}>Cancel</button>
+              <button
+                className="btn btn-primary"
+                onClick={handleImportAssets}
+                disabled={selectedImportAssetIds.length === 0}
+              >
+                Import Selected ({selectedImportAssetIds.length})
+              </button>
             </div>
           </div>
         </div>

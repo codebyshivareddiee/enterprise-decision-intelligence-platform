@@ -34,7 +34,7 @@ router = APIRouter(
 )
 async def upload_knowledge(
     request: Request,
-    workspace_id: UUID = Form(...),
+    workspace_id: UUID | None = Form(None),
     organization_id: UUID = Form(...),
     description: str = Form(...),
     file: UploadFile = File(...),
@@ -53,7 +53,7 @@ async def upload_knowledge(
         content_type = AssetContentType.MARKDOWN
     else:
         content_type = AssetContentType.TEXT
-
+ 
     import uuid
     dummy_schema_id = uuid.uuid4()
     # In a real app we'd get the user from request context or current_user
@@ -62,7 +62,7 @@ async def upload_knowledge(
         user_id = UUID(user_id_str)
     except ValueError:
         user_id = uuid.uuid4()
-
+ 
     asset = KnowledgeAsset(
         organization_id=organization_id,
         schema_id=dummy_schema_id,
@@ -86,7 +86,7 @@ async def upload_knowledge(
         request_id=getattr(request.state, "request_id", ""),
         user_id=user_id_str,
         organization_id=str(organization_id),
-        workspace_id=str(workspace_id),
+        workspace_id=str(workspace_id) if workspace_id else None,
         action="upload_knowledge",
         result="success"
     ))

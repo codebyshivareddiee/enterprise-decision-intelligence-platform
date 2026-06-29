@@ -30,7 +30,7 @@ export default function MainHome({ user, onSelectWorkspace, onTriggerUpload }) {
   const handleCreateWorkspace = async (e) => {
     e.preventDefault();
     if (!newWsName.trim()) return;
-    
+
     await api.createWorkspace(orgId, newWsName, newWsDesc);
     setNewWsName('');
     setNewWsDesc('');
@@ -55,7 +55,7 @@ export default function MainHome({ user, onSelectWorkspace, onTriggerUpload }) {
           <h3>{stats.total_workspaces}</h3>
           <p>Total Workspaces</p>
           <a href="#workspaces" className="stats-card-footer-link" onClick={(e) => e.preventDefault()}>
-            <span>View all workspaces</span>
+            <span>View Home</span>
             <ArrowRight size={14} />
           </a>
         </div>
@@ -125,7 +125,7 @@ export default function MainHome({ user, onSelectWorkspace, onTriggerUpload }) {
       {/* Workspace List Table */}
       <div>
         <div className="table-section-header">
-          <h2>All Workspaces</h2>
+          <h2>Home</h2>
           <button className="btn btn-secondary" onClick={() => setShowCreateModal(true)}>
             <PlusCircle size={16} />
             <span>Create Workspace</span>

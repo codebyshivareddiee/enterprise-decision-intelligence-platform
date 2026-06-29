@@ -405,5 +405,28 @@ export const api = {
     const newRule = { id: `rule-uuid-${Math.random().toString(36).substr(2, 9)}`, ...rule, status: 'active' };
     MOCK_RULES.push(newRule);
     return newRule;
+  },
+
+  async updateWorkspace(workspaceId, updatedWorkspace) {
+    try {
+      const response = await fetch(`${BASE_URL}/workspaces/${workspaceId}`, {
+        method: 'PATCH',
+        headers: getHeaders(),
+        body: JSON.stringify(updatedWorkspace),
+      });
+      if (response.ok) {
+        const res = await response.json();
+        return res.data;
+      }
+    } catch (e) {
+      console.warn('Backend update workspace failed, using mock.', e);
+    }
+    // Update local mock
+    const idx = MOCK_WORKSPACES.findIndex(w => w.id === workspaceId);
+    if (idx !== -1) {
+      MOCK_WORKSPACES[idx] = { ...MOCK_WORKSPACES[idx], ...updatedWorkspace };
+      return MOCK_WORKSPACES[idx];
+    }
+    return updatedWorkspace;
   }
 };

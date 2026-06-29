@@ -3,21 +3,22 @@ import { Layers, HelpCircle, LogOut, ChevronDown, Check, Plus, Bell, Search, Inf
 import { api, clearTokens } from './services/api';
 import Login from './views/Login';
 import MainHome from './views/MainHome';
-import WorkspaceHome from './views/WorkspaceHome';
 import Knowledge from './views/Knowledge';
 import Decisions from './views/Decisions';
 import Review from './views/Review';
 import History from './views/History';
 import Settings from './views/Settings';
+import UploadWizard from './components/UploadWizard';
 
 export default function App() {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [activeWorkspace, setActiveWorkspace] = useState(null);
-  const [currentTab, setCurrentTab] = useState('home'); // 'home' | 'knowledge' | 'decisions' | 'history' | 'settings'
+  const [currentTab, setCurrentTab] = useState('home'); // 'home' | 'knowledge' | 'history' | 'settings'
   const [workspaces, setWorkspaces] = useState([]);
   const [showWorkspaceDropdown, setShowWorkspaceDropdown] = useState(false);
   const [triggerUpload, setTriggerUpload] = useState(false);
+  const [showGlobalUploadWizard, setShowGlobalUploadWizard] = useState(false);
 
   // Decisions Flow Subviews
   const [decisionTab, setDecisionTab] = useState('input'); // 'input' | 'graph' | 'review'
@@ -73,7 +74,7 @@ export default function App() {
 
   const handleNavigateTab = (tab, query = '') => {
     setCurrentTab(tab);
-    if (tab === 'decisions') {
+    if (tab === 'home') {
       setDecisionTab('input');
       setActiveDecisionId(null);
       setInitialDecisionQuery(query);
@@ -88,13 +89,13 @@ export default function App() {
   const handleCreateWorkspace = async (e) => {
     e.preventDefault();
     if (!newWsName.trim()) return;
-    
+
     const orgId = user.organization_ids?.[0];
     const newWs = await api.createWorkspace(orgId, newWsName, newWsDesc);
     setNewWsName('');
     setNewWsDesc('');
     setShowCreateWsModal(false);
-    
+
     // Refresh workspaces and select the newly created one
     const fetched = await api.getWorkspaces(orgId);
     setWorkspaces(fetched);
@@ -132,7 +133,7 @@ export default function App() {
                 {activeWorkspace ? activeWorkspace.name.split(' ').map(n => n[0]).slice(0, 2).join('').toUpperCase() : 'AC'}
               </div>
               <span className="navbar-user-name">
-                {activeWorkspace ? activeWorkspace.name : 'All Workspaces'}
+                {activeWorkspace ? activeWorkspace.name : 'Home'}
               </span>
               <ChevronDown size={14} className="navbar-btn" style={{ padding: 0 }} />
             </div>
@@ -140,15 +141,15 @@ export default function App() {
             {showWorkspaceDropdown && (
               <div className="workspace-switcher-dropdown">
                 <div className="dropdown-header">Workspaces</div>
-                
-                <div 
-                  className="dropdown-item" 
+
+                <div
+                  className="dropdown-item"
                   onClick={() => { setActiveWorkspace(null); setShowWorkspaceDropdown(false); }}
                   style={{ fontWeight: !activeWorkspace ? 'bold' : 'normal' }}
                 >
                   <div className="dropdown-item-left">
                     <div className="workspace-avatar" style={{ backgroundColor: '#cbd5e1', color: '#475569' }}>ALL</div>
-                    <span>All Workspaces</span>
+                    <span>Home</span>
                   </div>
                   {!activeWorkspace && <Check size={14} style={{ color: 'var(--primary)' }} />}
                 </div>
@@ -156,9 +157,9 @@ export default function App() {
                 <div className="dropdown-divider"></div>
 
                 {workspaces.map(ws => (
-                  <div 
-                    key={ws.id} 
-                    className="dropdown-item" 
+                  <div
+                    key={ws.id}
+                    className="dropdown-item"
                     onClick={() => handleSelectWorkspace(ws)}
                     style={{ fontWeight: activeWorkspace?.id === ws.id ? 'bold' : 'normal' }}
                   >
@@ -183,11 +184,11 @@ export default function App() {
         </div>
 
         {/* Global Search Bar */}
-        <div className="navbar-search">
+        {/* <div className="navbar-search">
           <Search size={16} className="navbar-search-icon" />
           <input type="text" placeholder="Search knowledge assets, decisions, rules..." />
           <span className="navbar-search-shortcut">⌘ K</span>
-        </div>
+        </div> */}
 
         {/* Top-Right Profile / Actions */}
         <div className="navbar-actions">
@@ -202,10 +203,10 @@ export default function App() {
           <div className="dropdown-divider" style={{ width: '1px', height: '24px', margin: 0 }}></div>
 
           <div className="navbar-user-menu" onClick={handleLogout} title="Log Out">
-            <img 
-              className="navbar-user-avatar" 
-              src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=256&auto=format&fit=crop" 
-              alt="Avatar" 
+            <img
+              className="navbar-user-avatar"
+              src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=256&auto=format&fit=crop"
+              alt="Avatar"
             />
             <span className="navbar-user-name">{user.full_name || 'Alex Johnson'}</span>
             <LogOut size={16} style={{ color: 'var(--text-muted)', marginLeft: '4px' }} />
@@ -219,35 +220,28 @@ export default function App() {
         {activeWorkspace && (
           <aside className="sidebar">
             <div className="sidebar-menu">
-              <button 
+              <button
                 className={`sidebar-link ${currentTab === 'home' ? 'active' : ''}`}
                 onClick={() => handleNavigateTab('home')}
               >
                 <Layers size={18} />
                 <span>Home</span>
               </button>
-              <button 
+              <button
                 className={`sidebar-link ${currentTab === 'knowledge' ? 'active' : ''}`}
                 onClick={() => handleNavigateTab('knowledge')}
               >
                 <Layers size={18} />
                 <span>Knowledge</span>
               </button>
-              <button 
-                className={`sidebar-link ${currentTab === 'decisions' ? 'active' : ''}`}
-                onClick={() => handleNavigateTab('decisions')}
-              >
-                <Layers size={18} />
-                <span>Decisions</span>
-              </button>
-              <button 
+              <button
                 className={`sidebar-link ${currentTab === 'history' ? 'active' : ''}`}
                 onClick={() => handleNavigateTab('history')}
               >
                 <Layers size={18} />
                 <span>History</span>
               </button>
-              <button 
+              <button
                 className={`sidebar-link ${currentTab === 'settings' ? 'active' : ''}`}
                 onClick={() => handleNavigateTab('settings')}
               >
@@ -279,50 +273,27 @@ export default function App() {
         <main className="main-content">
           {!activeWorkspace ? (
             /* Organization Overview page (No Sidebar) */
-            <MainHome 
-              user={user} 
-              onSelectWorkspace={handleSelectWorkspace} 
+            <MainHome
+              user={user}
+              onSelectWorkspace={handleSelectWorkspace}
               onTriggerUpload={() => {
-                // If clicked from main screen, auto-activate first workspace and redirect to upload
-                handleSelectWorkspace(workspaces[0] || { id: 'ws1-uuid-0001', name: 'Acme Corporation' });
-                setTriggerUpload(true);
+                setShowGlobalUploadWizard(true);
               }}
             />
           ) : (
             /* Active Workspace Subpages */
             <>
               {currentTab === 'home' && (
-                <WorkspaceHome 
-                  workspace={activeWorkspace} 
-                  onNavigateTab={handleNavigateTab}
-                  onSelectDecision={(dec) => handleDecisionComplete(dec.id)}
-                  onTriggerUpload={() => {
-                    setCurrentTab('knowledge');
-                    setTriggerUpload(true);
-                  }}
-                />
-              )}
-
-              {currentTab === 'knowledge' && (
-                <Knowledge 
-                  workspace={activeWorkspace} 
-                  user={user}
-                  triggerOpenUpload={triggerUpload}
-                  onCloseUploadTrigger={() => setTriggerUpload(false)}
-                />
-              )}
-
-              {currentTab === 'decisions' && (
                 <>
                   {decisionTab === 'input' && (
-                    <Decisions 
-                      workspace={activeWorkspace} 
+                    <Decisions
+                      workspace={activeWorkspace}
                       initialQuery={initialDecisionQuery}
                       onDecisionComplete={handleDecisionComplete}
                     />
                   )}
                   {decisionTab === 'review' && (
-                    <Review 
+                    <Review
                       workspace={activeWorkspace}
                       decisionId={activeDecisionId}
                       onBackToDashboard={() => {
@@ -339,6 +310,17 @@ export default function App() {
                     />
                   )}
                 </>
+              )}
+
+              {currentTab === 'knowledge' && (
+                <Knowledge
+                  workspace={activeWorkspace}
+                  user={user}
+                  onUpdateWorkspace={(updatedWs) => {
+                    setActiveWorkspace(updatedWs);
+                    setWorkspaces(prev => prev.map(w => w.id === updatedWs.id ? updatedWs : w));
+                  }}
+                />
               )}
 
               {currentTab === 'history' && (
@@ -392,6 +374,17 @@ export default function App() {
           </div>
         </div>
       )}
+      {showGlobalUploadWizard && (
+        <UploadWizard
+          user={user}
+          workspace={null}
+          onClose={() => setShowGlobalUploadWizard(false)}
+          onSuccess={(newAsset) => {
+            setShowGlobalUploadWizard(false);
+            alert('Document uploaded globally successfully!');
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -399,15 +392,15 @@ export default function App() {
 // Simple loader icon component
 function LoaderSpinner({ size = 24 }) {
   return (
-    <svg 
-      className="inspector-agent-avatar running" 
-      width={size} 
-      height={size} 
-      viewBox="0 0 24 24" 
-      fill="none" 
-      stroke="var(--primary)" 
-      strokeWidth="3" 
-      strokeLinecap="round" 
+    <svg
+      className="inspector-agent-avatar running"
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="var(--primary)"
+      strokeWidth="3"
+      strokeLinecap="round"
       strokeLinejoin="round"
     >
       <path d="M21 12a9 9 0 1 1-6.219-8.56" />
