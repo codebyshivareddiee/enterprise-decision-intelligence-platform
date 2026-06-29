@@ -26,7 +26,7 @@ class TxtParser(DocumentParser):
             ParsingError: If content is missing or cannot be read.
         """
         try:
-            if asset.raw_content:
+            if asset.raw_content is not None:
                 text = str(asset.raw_content)
                 # Compute basic stats
                 char_count = len(text)

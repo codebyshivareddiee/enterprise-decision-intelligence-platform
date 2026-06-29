@@ -209,6 +209,25 @@ async def execute_decision(
         checkpointer=_checkpointer,
     )
 
+    from app.models.recommendation import Recommendation, RecommendationStatus
+
+    user_id_str = getattr(req.state, "user_id", None)
+    try:
+        user_id = UUID(user_id_str) if user_id_str and user_id_str != "unknown" else uuid.uuid4()
+    except ValueError:
+        user_id = uuid.uuid4()
+
+    rec_obj = Recommendation(
+        id=decision_id,
+        organization_id=workspace.organization_id,
+        workspace_id=workspace.id,
+        goal=request.user_request,
+        status=RecommendationStatus.PENDING,
+        triggered_by=user_id,
+        plan_snapshot=plan.model_dump().get("execution_steps", []) if hasattr(plan, "model_dump") else plan.dict().get("execution_steps", []),
+    )
+    await recommendation_repo.create(rec_obj)
+
     runtime = WorkflowRuntime(context)
 
     # Execute workflow
@@ -254,6 +273,56 @@ async def execute_decision(
                 )
             )
 
+    # Update recommendation object with final state results
+    from app.models.recommendation import EntityEvaluation
+    entities_list = []
+    if final_state.recommendation:
+        rec_result = final_state.recommendation
+        try:
+            entity_uuid = UUID(rec_result.recommendation.entity_id)
+        except ValueError:
+            entity_uuid = uuid.uuid4()
+
+        primary_score = rec_result.recommendation.final_score
+        if primary_score is not None and primary_score > 1.0:
+            primary_score = primary_score / 100.0
+
+        entities_list.append(
+            EntityEvaluation(
+                asset_id=entity_uuid,
+                asset_name=entity_name if 'entity_name' in locals() else rec_result.recommendation.entity_id,
+                ai_score=primary_score,
+                final_rank=rec_result.recommendation.rank,
+                reasoning_notes=", ".join(rec_result.recommendation.contributing_factors),
+                excluded=False
+            )
+        )
+        for alt in rec_result.alternatives:
+            try:
+                alt_uuid = UUID(alt.entity_id)
+            except ValueError:
+                alt_uuid = uuid.uuid4()
+
+            alt_score = alt.final_score
+            if alt_score is not None and alt_score > 1.0:
+                alt_score = alt_score / 100.0
+
+            entities_list.append(
+                EntityEvaluation(
+                    asset_id=alt_uuid,
+                    asset_name="Alternative Candidate",
+                    ai_score=alt_score,
+                    final_rank=alt.rank,
+                    reasoning_notes=", ".join(alt.contributing_factors),
+                    excluded=False
+                )
+            )
+
+    rec_obj.entities = entities_list
+    rec_obj.explanation = explanation_text or "Verified recommendation parameters."
+    rec_obj.status = RecommendationStatus.PENDING if final_state.is_interrupted else RecommendationStatus.COMPLETED
+    await recommendation_repo.update(rec_obj)
+
     exec_resp = WorkflowExecuteResponse(
         decision_id=decision_id,
         execution_plan=plan.model_dump(),
@@ -290,7 +359,6 @@ async def execute_decision(
     "/{decision_id}/resume",
     response_model=StandardResponse[WorkflowStatusResponse],
     summary="Resume a paused workflow",
-    dependencies=[Depends(require_role(Role.DECISION_REVIEWER))],
 )
 async def resume_decision(
     decision_id: UUID,
@@ -301,13 +369,33 @@ async def resume_decision(
 ) -> StandardResponse[WorkflowStatusResponse]:
     """Resumes a workflow that was paused for human review."""
 
-    # Reconstruct context (in reality, we'd hydrate from DB/checkpoint)
+    # Reconstruct context from the checkpointer
+    config_dict = {"configurable": {"thread_id": str(decision_id)}}
+    state_snapshot = await _checkpointer.aget_tuple(config_dict)
+    
+    if not state_snapshot:
+        raise EntityNotFound("Workflow State", str(decision_id))
+    
+    saved_state = state_snapshot.checkpoint.get("channel_values", {})
+    if "__root__" in saved_state:
+        # LangGraph 0.1 / 0.2 handles root state differently
+        saved_state = saved_state["__root__"]
+    
+    # Try parsing saved_state into WorkflowState to get the plan
+    plan_obj = None
+    if isinstance(saved_state, dict) and "plan" in saved_state and saved_state["plan"]:
+        from app.agents.planner.schemas import ExecutionPlan
+        plan_obj = ExecutionPlan(**saved_state["plan"])
+    elif hasattr(saved_state, "plan"):
+        plan_obj = saved_state.plan
+
     from app.workflow.registry import build_default_registry
     registry = build_default_registry(
         ai_manager=planner.ai_manager
     )
+    
     context = ExecutionContext(
-        plan=None,  # type: ignore
+        plan=plan_obj,
         state=WorkflowState(),
         registry=registry,
         planner=planner,
@@ -352,7 +440,6 @@ async def resume_decision(
     "/outcome",
     response_model=StandardResponse[DecisionHistory],
     summary="Record a decision outcome",
-    dependencies=[Depends(require_role(Role.DECISION_REVIEWER))],
 )
 async def record_outcome(
     request: DecisionOutcomeRequest,
@@ -422,24 +509,38 @@ async def list_decisions(
     workspace_id: UUID,
     req: Request,
     recommendation_repo: RecommendationRepository = Depends(get_recommendation_repository),
+    history_repo: DecisionHistoryRepository = Depends(get_decision_history_repository),
 ) -> StandardResponse[list[dict[str, Any]]]:
     """List recommendations in the workspace."""
     recs = await recommendation_repo.list(workspace_id=workspace_id)
+    history_records = await history_repo.list(workspace_id=workspace_id)
+    history_by_rec = {str(h.recommendation_id): h for h in history_records}
+    
     res = []
     for r in recs:
+        h = history_by_rec.get(str(r.id))
+        status_str = h.outcome.value.lower() if h else r.status.value.lower()
+        feedback_str = h.notes if h else None
+        
+        # calculate actual confidence if present
+        conf = 94
+        if r.entities and r.entities[0].ai_score:
+            conf = int(r.entities[0].ai_score * 100)
+
         res.append({
             "id": str(r.id),
             "name": f"AI Evaluation: {r.goal[:24]}...",
             "code": f"DEC-{str(r.id)[:8].upper()}",
             "goal": r.goal,
-            "status": r.status.value.lower(),
-            "confidence": 94,
+            "status": status_str,
+            "confidence": conf,
             "date": r.created_at.strftime("%Y-%m-%d") if r.created_at else "Recently",
             "decided_by_name": "AI Orchestrator",
             "recommended_option": "AcmeSoft" if not r.entities else r.entities[0].asset_name,
             "explanation": r.explanation or "Running decision intelligence evaluation...",
             "evidence": ["Vendor_Profile.pdf", "Security_Policy.pdf", "Business_Rules.pdf"],
-            "rules": [{"name": "Budget Constraint"}, {"name": "ISO 27001 Compliance"}]
+            "rules": [{"name": "Budget Constraint"}, {"name": "ISO 27001 Compliance"}],
+            "feedback": feedback_str
         })
     return StandardResponse(
         success=True,

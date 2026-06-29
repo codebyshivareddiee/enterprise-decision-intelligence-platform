@@ -112,5 +112,14 @@ def build_default_registry(knowledge_manager=None, ai_manager=None) -> AgentRegi
         description="Provides natural language explanation"
     )
     
+    from app.agents.learner.agent import LearnerAgent
+    registry.register(
+        agent_type=AgentType.LEARNER,
+        node_implementation=LearnerAgent(ai_manager=ai_manager).execute,
+        consumes=[WorkflowArtifact.HUMAN_FEEDBACK, WorkflowArtifact.FINAL_DECISION],
+        produces=[WorkflowArtifact.PREFERENCE_UPDATE],
+        description="Generates preference updates based on human feedback"
+    )
+    
     return registry
 

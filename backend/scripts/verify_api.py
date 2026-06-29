@@ -147,7 +147,7 @@ async def main() -> None:
             # Note: Depending on Planner/Workflow mocking or real API availability, this might fail or succeed.
             # For now, just print the response.
             if response.status_code == 200:
-                decision_id = exec_data["decision_id"]
+                decision_id = exec_data["data"]["decision_id"]
 
                 # 8. Record Outcome
                 print("\n--- Testing POST /decisions/outcome ---")

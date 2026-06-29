@@ -234,13 +234,15 @@ export const api = {
     return response.data.data;
   },
 
-  async resumeDecision(decisionId, feedback) {
-    const response = await axiosInstance.post(`/decisions/${decisionId}/resume`, { feedback });
+  async resumeDecision(decisionId, approved, feedback) {
+    const response = await axiosInstance.post(`/decisions/${decisionId}/resume`, { approved, feedback });
     return response.data.data;
   },
 
-  async recordOutcome(decisionId, humanDecision, feedback) {
-    const response = await axiosInstance.post('/decisions/outcome', { decision_id: decisionId, human_decision: humanDecision, feedback });
+  async recordOutcome(decisionId, humanDecision, feedback, finalOutcome = null) {
+    const payload = { decision_id: decisionId, human_decision: humanDecision, feedback };
+    if (finalOutcome) payload.final_outcome = finalOutcome;
+    const response = await axiosInstance.post('/decisions/outcome', payload);
     return response.data.data;
   },
 

@@ -24,7 +24,7 @@ class ExecutionContext(BaseModel):
     This avoids passing multiple parameters across the runtime layer.
     """
 
-    plan: ExecutionPlan = Field(description="The execution plan from the planner")
+    plan: ExecutionPlan | None = Field(default=None, description="The execution plan from the planner")
     state: WorkflowState = Field(description="The initial or current workflow state")
     registry: AgentRegistry = Field(
         description="The agent registry containing node implementations"

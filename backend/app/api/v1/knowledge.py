@@ -49,15 +49,36 @@ router = APIRouter(
 )
 async def analyze_knowledge(
     request: Request,
-    workspace_id: UUID | None = Form(None),
-    organization_id: UUID = Form(...),
+    workspace_id: str | None = Form(None),
+    organization_id: str = Form(...),
     description: str = Form(...),
-    schema_id: UUID | None = Form(None),
+    schema_id: str | None = Form(None),
     file: UploadFile = File(...),
     knowledge_manager: KnowledgeManager = Depends(get_knowledge_manager),
 ) -> StandardResponse[KnowledgeAnalyzeResponse]:
     """Analyze a knowledge asset to suggest ingestion parameters."""
     content_bytes = await file.read()
+
+    # Convert str Form parameters to UUID objects
+    import uuid
+    try:
+        org_id = UUID(organization_id)
+    except (ValueError, TypeError):
+        org_id = uuid.uuid4()
+
+    ws_id = None
+    if workspace_id and workspace_id != "null" and workspace_id != "undefined":
+        try:
+            ws_id = UUID(workspace_id)
+        except (ValueError, TypeError):
+            pass
+
+    sch_id = None
+    if schema_id and schema_id != "null" and schema_id != "undefined":
+        try:
+            sch_id = UUID(schema_id)
+        except (ValueError, TypeError):
+            pass
 
     # ── Route binary vs text formats ──────────────────────────
     file_path: str | None = None
@@ -77,8 +98,7 @@ async def analyze_knowledge(
         content_type = AssetContentType.TEXT
         raw_content = content_bytes.decode("utf-8", errors="ignore")
 
-    import uuid
-    dummy_schema_id = schema_id or uuid.uuid4()
+    dummy_schema_id = sch_id or uuid.uuid4()
 
     # In a real app we'd get the user from request context or current_user
     user_id_str = getattr(request.state, "user_id", str(uuid.uuid4()))
@@ -89,7 +109,7 @@ async def analyze_knowledge(
 
     # Create a temporary asset in memory (not saved to repo)
     temp_asset = KnowledgeAsset(
-        organization_id=organization_id,
+        organization_id=org_id,
         schema_id=dummy_schema_id,
         name=file.filename or "uploaded_document",
         content_type=content_type,
@@ -107,14 +127,14 @@ async def analyze_knowledge(
     available_schemas = [
         KnowledgeSchema(
             id=uuid.UUID("d69a23d0-3e2b-47e2-8828-87b6be6f25db"),
-            organization_id=organization_id,
+            organization_id=org_id,
             name="Candidate Profile",
             description="Profile schema for AI Engineer candidates",
             fields=[SchemaField(name="name", label="Name", field_type=FieldType.STRING, required=True)],
         ),
         KnowledgeSchema(
             id=uuid.UUID("e3f898a3-2f2c-499b-9a4c-1f55b99f30ce"),
-            organization_id=organization_id,
+            organization_id=org_id,
             name="Software Vendor Profile",
             description="Evaluation profiles for third-party software vendors",
             fields=[SchemaField(name="vendor_name", label="Vendor Name", field_type=FieldType.STRING, required=True)],
@@ -169,12 +189,12 @@ async def analyze_knowledge(
 )
 async def upload_knowledge(
     request: Request,
-    workspace_id: UUID | None = Form(None),
-    organization_id: UUID = Form(...),
+    workspace_id: str | None = Form(None),
+    organization_id: str = Form(...),
     description: str = Form(...),
     chunking_strategy_override: str | None = Form(None),
     chunk_profile_override: str | None = Form(None),
-    schema_id_override: UUID | None = Form(None),
+    schema_id_override: str | None = Form(None),
     file: UploadFile = File(...),
     repo: KnowledgeAssetRepository = Depends(get_knowledge_asset_repository),
     knowledge_manager: KnowledgeManager = Depends(get_knowledge_manager),
@@ -182,6 +202,27 @@ async def upload_knowledge(
 ) -> StandardResponse[KnowledgeUploadResponse]:
     """Upload and index a knowledge asset."""
     content_bytes = await file.read()
+
+    # Convert str Form parameters to UUID objects
+    import uuid
+    try:
+        org_id = UUID(organization_id)
+    except (ValueError, TypeError):
+        org_id = uuid.uuid4()
+
+    ws_id = None
+    if workspace_id and workspace_id != "null" and workspace_id != "undefined":
+        try:
+            ws_id = UUID(workspace_id)
+        except (ValueError, TypeError):
+            pass
+
+    sch_id_override = None
+    if schema_id_override and schema_id_override != "null" and schema_id_override != "undefined":
+        try:
+            sch_id_override = UUID(schema_id_override)
+        except (ValueError, TypeError):
+            pass
 
     # ── Route binary vs text formats ──────────────────────────
     file_path: str | None = None
@@ -212,7 +253,7 @@ async def upload_knowledge(
         user_id = uuid.uuid4()
 
     asset = KnowledgeAsset(
-        organization_id=organization_id,
+        organization_id=org_id,
         schema_id=dummy_schema_id,
         name=file.filename or "uploaded_document",
         content_type=content_type,
@@ -225,8 +266,8 @@ async def upload_knowledge(
 
     asset = await repo.create(asset)
 
-    if schema_id_override:
-        asset.schema_id = schema_id_override
+    if sch_id_override:
+        asset.schema_id = sch_id_override
 
     # Temporary override mechanism - since KnowledgeManager.index_asset
     # invokes DocumentProcessor.process which runs the AI analyzer,

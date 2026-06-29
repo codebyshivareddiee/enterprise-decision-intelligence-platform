@@ -50,7 +50,7 @@ export default function Review({ workspace, decisionId, onBackToDashboard, onVie
     setLoading(true);
     try {
       await api.recordOutcome(decision.id, 'Approved', feedback);
-      await api.resumeDecision(decision.id, feedback);
+      await api.resumeDecision(decision.id, true, feedback);
       toast.success('Decision Approved successfully!');
       onBackToDashboard();
     } catch (err) {
@@ -68,8 +68,8 @@ export default function Review({ workspace, decisionId, onBackToDashboard, onVie
     setLoading(true);
     try {
       await api.recordOutcome(decision.id, 'Rejected', feedback);
-      await api.resumeDecision(decision.id, feedback);
-      toast.success('Decision Rejected.');
+      await api.resumeDecision(decision.id, false, feedback);
+      toast.success('System learned from this feedback. Decision Rejected.');
       onBackToDashboard();
     } catch (err) {
       toast.error('Failed to reject decision.');
