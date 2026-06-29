@@ -33,96 +33,90 @@ Executes decision plans dynamically through agent pipelines, retrieving evidence
 
 ## Project Setup & Installation
 
-### Prerequisites
-- Python 3.11+
-- Node.js 18+ & npm
-- [uv](https://docs.astral.sh/uv/) (strongly recommended for Python package management)
-- MongoDB & Qdrant credentials (local or cloud instances)
+### 1. Prerequisites
+Before running the platform, ensure you have the following installed:
+- **Node.js 18+** & npm (for the frontend)
+- **Python 3.11+** (for manual backend setup)
+- **Docker & Docker Compose** (optional, for containerized backend)
+- **[uv](https://docs.astral.sh/uv/)** (strongly recommended for Python package management if running manually)
+
+> [!IMPORTANT]
+> **Cloud Databases Required:** This project does NOT run MongoDB or Qdrant locally via Docker. You must provision external databases (e.g., MongoDB Atlas and Qdrant Cloud) and provide their connection URIs in your `.env` file.
 
 ---
 
-### Backend Setup
+### 2. Environment Configuration (Backend)
 
-1. **Navigate to the backend directory**:
+The backend requires valid database URIs and an OpenAI API key to function.
+
+1. Navigate to the backend directory:
    ```bash
    cd backend
    ```
-
-2. **Configure environment variables**:
-   Copy the template and edit `.env` with your API keys and database URIs:
+2. Copy the template environment file:
    ```bash
    cp .env.example .env
    ```
+3. Open `.env` and fill in your credentials:
+   - `OPENAI_API_KEY`
+   - `MONGODB_URI`
+   - `QDRANT_URL` and `QDRANT_API_KEY`
 
-3. **Install dependencies**:
-   Using `uv` (recommended):
+---
+
+### 3. Running the Backend
+
+You can run the backend either via Docker (Recommended) or Manually.
+
+#### Option A: Docker (Recommended)
+From the **root directory**, spin up the backend container:
+```bash
+docker compose up --build
+```
+*The backend API documentation will be available at [http://localhost:8000/docs](http://localhost:8000/docs).*
+
+#### Option B: Manual Execution
+1. From the `backend` directory, create and activate a virtual environment using `uv`:
    ```bash
    uv venv
-   # Activate virtual environment
-   # Windows:
+   
+   # Activate (Windows)
    .venv\Scripts\activate
-   # macOS/Linux:
+   # Activate (macOS/Linux)
    source .venv/bin/activate
-
+   ```
+2. Install dependencies and start the server:
+   ```bash
    uv pip install -r requirements.txt
    uv pip install -e ".[dev]"
-   ```
-   *Alternatively, using standard pip:*
-   ```bash
-   python -m venv .venv
-   source .venv/bin/activate  # Or Windows equivalent
-   pip install -r requirements.txt
-   pip install -e ".[dev]"
-   ```
-
-4. **Run the Backend server**:
-   ```bash
+   
    uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
-   ```
-   The backend API documentation will be available at [http://localhost:8000/docs](http://localhost:8000/docs).
-
-5. **Run tests**:
-   ```bash
-   pytest --cov=app -v
    ```
 
 ---
 
-### Frontend Setup
+### 4. Running the Frontend
 
-1. **Navigate to the frontend directory**:
+The frontend is a React + Vite application that runs locally and connects to the backend API.
+
+1. Navigate to the frontend directory:
    ```bash
-   cd ../frontend
+   cd frontend
    ```
-
-2. **Configure environment variables**:
-   Create a `.env` file pointing to the backend API:
+2. Configure the environment variables:
    ```bash
+   # Linux/macOS
    echo "VITE_API_URL=http://localhost:8000/api/v1" > .env
+   
+   # Windows (PowerShell)
+   echo "VITE_API_URL=http://localhost:8000/api/v1" | Out-File -Encoding UTF8 .env
    ```
-
-3. **Install Node modules**:
+3. Install dependencies:
    ```bash
    npm install
    ```
-
-4. **Run the Frontend dev server**:
+4. Start the development server:
    ```bash
    npm run dev
    ```
-   Open [http://localhost:5173](http://localhost:5173) in your browser.
-
----
-
-## Docker Stack Execution
-
-To run the entire system (Backend, Frontend, MongoDB, Qdrant) in local containerized mode:
-
-```bash
-# From the root directory
-docker compose up --build
-```
-
-- Frontend: [http://localhost:3000](http://localhost:3000)
-- Backend API Docs: [http://localhost:8000/docs](http://localhost:8000/docs)
-- Qdrant Dashboard: [http://localhost:6333/dashboard](http://localhost:6333/dashboard)
+   *Open [http://localhost:5173](http://localhost:5173) in your browser to access the platform.*
