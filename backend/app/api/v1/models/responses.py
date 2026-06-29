@@ -3,10 +3,7 @@
 from typing import Any
 from uuid import UUID
 
-from pydantic import BaseModel, Field
-
-from app.models.decision_history import DecisionHistory
-from app.models.knowledge_asset import KnowledgeAsset
+from pydantic import BaseModel
 
 
 class HealthResponse(BaseModel):

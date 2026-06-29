@@ -29,7 +29,7 @@ class Settings(BaseSettings):
     app_log_level: str = "INFO"
     app_cors_origins: str | list[str] = ["http://localhost:5173"]
     secret_key: str = "change-me"
-    
+
     # ── Authentication & Authorization ───────────────────────────────────────
     jwt_secret_key: str = "super-secret-jwt-key-change-me"
     jwt_algorithm: str = "HS256"
@@ -82,7 +82,11 @@ class Settings(BaseSettings):
     @field_validator("jwt_secret_key")
     @classmethod
     def validate_jwt_secret(cls, value: str) -> str:
-        if not value or value == "super-secret-jwt-key-change-me" or value == "change-me":
+        if (
+            not value
+            or value == "super-secret-jwt-key-change-me"
+            or value == "change-me"
+        ):
             raise ValueError("A valid JWT Secret must be provided")
         return value
 

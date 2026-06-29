@@ -1,4 +1,5 @@
 import argparse
+
 # ruff: noqa: E402, ANN201, ANN202, ANN204, E501
 import asyncio
 import sys
@@ -14,6 +15,7 @@ sys.path.append(str(backend_dir))
 from dotenv import load_dotenv
 from openai import AsyncOpenAI
 from qdrant_client import AsyncQdrantClient
+from scripts.demo_data import get_demo_scenarios
 
 from app.agents.explanation.agent import ExplanationAgent
 from app.agents.learner.agent import LearnerAgent
@@ -40,14 +42,11 @@ from app.models.enums import (
     AssetContentType,
     AssetStatus,
     DecisionOutcome,
-    FieldType,
     UserRole,
     UserStatus,
     WorkspaceStatus,
 )
 from app.models.knowledge_asset import KnowledgeAsset
-from app.models.knowledge_schema import KnowledgeSchema, SchemaField
-from app.models.organization import Organization
 from app.models.user import User
 from app.models.workspace import Workspace
 from app.persistence.mongodb import client as mongo_client
@@ -75,7 +74,6 @@ from app.persistence.mongodb.repositories.workspace_repository import (
     WorkspaceRepository,
 )
 from app.workflow import AgentRegistry, ExecutionContext, WorkflowRuntime, WorkflowState
-from scripts.demo_data import get_demo_scenarios
 
 
 class PlatformCLI:
@@ -190,18 +188,18 @@ class PlatformCLI:
     async def _setup_context(self):
         self.log_debug("Fetching demo scenarios...")
         scenarios = get_demo_scenarios()
-        
+
         print("\nAvailable Demo Scenarios:")
         for key, sc in scenarios.items():
             print(f"  - {key}: {sc.name}")
-        
+
         selected = input("\nEnter scenario key (default: vendor): ").strip().lower()
         if not selected or selected not in scenarios:
             selected = "vendor"
-            
+
         scenario = scenarios[selected]
         print(f"\nLoading Scenario: {scenario.name}")
-        
+
         # Get or create Org
         orgs = await self.org_repo.list()
         self.org = next((o for o in orgs if o.slug == scenario.organization.slug), None)
@@ -237,7 +235,9 @@ class PlatformCLI:
 
         # Get or create Workspace
         workspaces = await self.workspace_repo.list(organization_id=self.org.id)
-        self.workspace = next((w for w in workspaces if w.name == scenario.workspace_name), None)
+        self.workspace = next(
+            (w for w in workspaces if w.name == scenario.workspace_name), None
+        )
         if not self.workspace:
             self.log_debug(f"Creating Workspace: {scenario.workspace_name}")
             self.workspace = Workspace(
@@ -248,11 +248,17 @@ class PlatformCLI:
                 status=WorkspaceStatus.ACTIVE,
                 owner_id=self.user.id,
                 selected_knowledge_asset_ids=[],
+                goal=f"Goal for {scenario.workspace_name}",
+                success_metrics="Successful decisions",
+                decision_points="Evaluate based on schema",
+                workspace_summary={},
             )
             await self.workspace_repo.create(self.workspace)
 
         # Get or create some business rules
-        rules = await self.rule_repo.list(organization_id=self.org.id, workspace_id=self.workspace.id)
+        rules = await self.rule_repo.list(
+            organization_id=self.org.id, workspace_id=self.workspace.id
+        )
         if not rules:
             self.log_debug("Creating default BusinessRule")
             rule1 = BusinessRule(
@@ -328,11 +334,13 @@ class PlatformCLI:
             organization_id=self.org.id,
             schema_id=self.schema.id,
             name=f"Uploaded Knowledge {str(uuid4())[:8]}",
-            description=description,
+            user_description=description,
             content_type=AssetContentType.TEXT,
             status=AssetStatus.PENDING,
             raw_content=doc_content,
-            uploaded_by=self.user.id
+            uploaded_by=self.user.id,
+            dynamic_metadata={},
+            content_hash=None,
         )
         await self.asset_repo.create(asset)
 
@@ -490,8 +498,10 @@ class PlatformCLI:
             a = await self.asset_repo.get_by_id(aid)
             if a:
                 assets.append(a)
-        rules = await self.rule_repo.list(organization_id=self.org.id, workspace_id=self.workspace.id)
-        
+        rules = await self.rule_repo.list(
+            organization_id=self.org.id, workspace_id=self.workspace.id
+        )
+
         if not assets:
             print(
                 "WARNING: No knowledge assets found in this workspace. Retrieval might return empty results."
@@ -571,7 +581,9 @@ class PlatformCLI:
                     if not state.validation_result.is_valid:
                         print("Violated Rules:")
                         for v in state.validation_result.violated_rules:
-                            print(f"  - [{v.rule_id}] {v.rule_description}: {v.violation_detail}")
+                            print(
+                                f"  - [{v.rule_id}] {v.rule_description}: {v.violation_detail}"
+                            )
 
                 approve = input("\nApprove? (Y/N): ").strip().upper()
                 if approve == "Y":
@@ -659,8 +671,10 @@ class PlatformCLI:
 
             if result and result.preference_update:
                 print(f"Learning Signal: {result.preference_update.learning_signal}")
-                print(f"Learned Attributes: {result.preference_update.learned_attributes}")
-            
+                print(
+                    f"Learned Attributes: {result.preference_update.learned_attributes}"
+                )
+
             self.log_debug("Persisting DecisionRecord to database...")
             # Persist to decision history
             # Convert status string to enum if possible, else fallback
@@ -672,13 +686,14 @@ class PlatformCLI:
                     if outcome.upper() in ["APPROVED", "HIRED"]
                     else DecisionOutcome.REJECTED
                 )
-                
+
             try:
                 import uuid
+
                 asset_uuid = uuid.UUID(entity_id)
             except Exception:
                 asset_uuid = uuid4()
-                
+
             record = DecisionHistory(
                 organization_id=str(self.org.id),
                 workspace_id=str(self.workspace.id),
@@ -687,7 +702,7 @@ class PlatformCLI:
                 decided_by=str(self.user.id),
                 outcome=db_status,
                 lifecycle_stage="Completed",
-                notes=feedback
+                notes=feedback,
             )
             await self.decision_repo.create(record)
 

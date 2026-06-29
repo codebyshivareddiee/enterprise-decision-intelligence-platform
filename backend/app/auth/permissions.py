@@ -1,9 +1,11 @@
 from enum import Enum
+
 from app.auth.models import Role
 
 
 class Permission(str, Enum):
     """Fine-grained permissions."""
+
     MANAGE_ORGANIZATIONS = "MANAGE_ORGANIZATIONS"
     MANAGE_WORKSPACES = "MANAGE_WORKSPACES"
     MANAGE_USERS = "MANAGE_USERS"

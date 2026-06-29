@@ -94,3 +94,25 @@ class Workspace(AuditedModel):
             "selected assets. Populated by the knowledge upload workflow."
         ),
     )
+    goal: str | None = Field(
+        default=None,
+        max_length=5000,
+        description="The primary objective of this workspace decision context.",
+    )
+    success_metrics: str | None = Field(
+        default=None,
+        max_length=5000,
+        description="Metrics by which the outcome of decisions in this workspace is evaluated.",
+    )
+    decision_points: str | None = Field(
+        default=None,
+        max_length=5000,
+        description="Key points of consideration when evaluating options in this workspace.",
+    )
+    workspace_summary: dict[str, object] | None = Field(
+        default=None,
+        description=(
+            "Auto-generated summary of the workspace contents (e.g. total assets, "
+            "common technologies, extracted skills). Used as lightweight context for the Planner."
+        ),
+    )

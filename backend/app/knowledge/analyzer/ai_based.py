@@ -1,42 +1,45 @@
 """AI-based document analyzer."""
 
 import json
+
 import structlog
 from openai import AsyncOpenAI
 
 logger = structlog.get_logger(__name__)
 from app.knowledge.analyzer.base import DocumentAnalyzer
-from app.knowledge.analyzer.models import DocumentAnalysisResult, ChunkProfile
+from app.knowledge.analyzer.models import ChunkProfile, DocumentAnalysisResult
+from app.knowledge.parsers.models import ParsedDocument
 from app.models.knowledge_asset import KnowledgeAsset
 from app.models.knowledge_schema import KnowledgeSchema
-from app.knowledge.parsers.models import ParsedDocument
+
 
 class AIDocumentAnalyzer(DocumentAnalyzer):
     """Uses LLM to analyze document and select optimal processing strategy."""
 
-    def __init__(self, client: AsyncOpenAI | None = None, model: str = "gpt-4o-mini") -> None:
-        from app.config.settings import get_settings
-        settings = get_settings()
-        api_key = settings.openai_api_key or "sk-placeholder-key-for-bootstrap"
-        self.client = client or AsyncOpenAI(api_key=api_key)
+    def __init__(
+        self, client: AsyncOpenAI | None = None, model: str = "gpt-4o-mini"
+    ) -> None:
+        self.client = client or AsyncOpenAI()
         self.model = model
 
     async def analyze(
-        self, 
+        self,
         asset: KnowledgeAsset,
-        parsed_doc: ParsedDocument, 
-        available_schemas: list[KnowledgeSchema]
+        parsed_doc: ParsedDocument,
+        available_schemas: list[KnowledgeSchema],
     ) -> DocumentAnalysisResult | None:
-        
+
         # Prepare schemas description
         schemas_info = []
         for schema in available_schemas:
-            schemas_info.append({
-                "id": str(schema.id),
-                "name": schema.name,
-                "description": schema.description
-            })
-            
+            schemas_info.append(
+                {
+                    "id": str(schema.id),
+                    "name": schema.name,
+                    "description": schema.description,
+                }
+            )
+
         system_prompt = (
             "You are an expert Document Analyst for an enterprise AI platform.\n"
             "Your task is to analyze a document's metadata and sample content, and determine the optimal "
@@ -67,7 +70,7 @@ class AIDocumentAnalyzer(DocumentAnalyzer):
             '  "requires_human_confirmation": boolean\n'
             "}"
         )
-        
+
         user_prompt = (
             f"USER DESCRIPTION:\n{asset.user_description or 'None provided'}\n\n"
             f"FILE METADATA:\n"
@@ -78,27 +81,27 @@ class AIDocumentAnalyzer(DocumentAnalyzer):
             f"- Headings: {parsed_doc.headings[:20]} (truncated)\n\n"
             f"SAMPLED CONTENT:\n"
         )
-        
+
         for page_num, text in parsed_doc.sampled_pages.items():
             user_prompt += f"--- Page {page_num} Sample ---\n{text}\n\n"
-            
+
         try:
             response = await self.client.chat.completions.create(
                 model=self.model,
                 messages=[
                     {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_prompt}
+                    {"role": "user", "content": user_prompt},
                 ],
                 response_format={"type": "json_object"},
-                temperature=0.1
+                temperature=0.1,
             )
-            
+
             result_json = response.choices[0].message.content
             if not result_json:
                 return None
-                
+
             data = json.loads(result_json)
-            
+
             return DocumentAnalysisResult(
                 matched_schema_id=data.get("matched_schema_id"),
                 chunking_strategy=data.get("chunking_strategy", "SlidingWindowChunker"),
@@ -108,7 +111,9 @@ class AIDocumentAnalyzer(DocumentAnalyzer):
                 detected_document_type=data.get("detected_document_type"),
                 detected_language=data.get("detected_language"),
                 estimated_complexity=data.get("estimated_complexity"),
-                requires_human_confirmation=bool(data.get("requires_human_confirmation", False))
+                requires_human_confirmation=bool(
+                    data.get("requires_human_confirmation", False)
+                ),
             )
         except Exception as e:
             # Fallback gracefully

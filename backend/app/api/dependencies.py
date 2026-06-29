@@ -1,6 +1,5 @@
 """FastAPI dependencies for injecting services, repositories, and context."""
 
-from collections.abc import AsyncGenerator
 from typing import TypeVar
 
 from fastapi import Depends, Request
@@ -17,18 +16,37 @@ from app.persistence.mongodb.repositories.business_rule_repository import Busine
 from app.persistence.mongodb.repositories.audit_repository import AuditRepository
 from app.persistence.mongodb.repositories.user_repository import UserRepository
 from app.persistence.mongodb.repositories.recommendation_repository import RecommendationRepository
+# Workflow Layer
+from app.agents.planner.planner import Planner
 
 # AI Layer
 from app.ai.manager import AIManager
 
-# Knowledge Layer
-from app.knowledge.manager.knowledge_manager import KnowledgeManager
-
-# Workflow Layer
-from app.agents.planner.planner import Planner
-
 # Auth Layer
 from app.auth.service import AuthService
+from app.core.container import ServiceContainer
+
+# Knowledge Layer
+from app.knowledge.manager.knowledge_manager import KnowledgeManager
+from app.persistence.mongodb.repositories.audit_repository import AuditRepository
+from app.persistence.mongodb.repositories.business_rule_repository import (
+    BusinessRuleRepository,
+)
+from app.persistence.mongodb.repositories.decision_history_repository import (
+    DecisionHistoryRepository,
+)
+from app.persistence.mongodb.repositories.knowledge_asset_repository import (
+    KnowledgeAssetRepository,
+)
+
+# Persistence Layer
+from app.persistence.mongodb.repositories.organization_repository import (
+    OrganizationRepository,
+)
+from app.persistence.mongodb.repositories.user_repository import UserRepository
+from app.persistence.mongodb.repositories.workspace_repository import (
+    WorkspaceRepository,
+)
 
 T = TypeVar("T")
 
@@ -38,7 +56,9 @@ def get_container(request: Request) -> ServiceContainer:
     return request.app.state.container
 
 
-def get_db(container: ServiceContainer = Depends(get_container)) -> AsyncIOMotorDatabase:
+def get_db(
+    container: ServiceContainer = Depends(get_container),
+) -> AsyncIOMotorDatabase:
     """Return the Motor database instance."""
     return container.db
 

@@ -4,19 +4,25 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, Request
 
-from app.api.dependencies import get_organization_repository, get_audit_repository
+from app.api.dependencies import get_audit_repository, get_organization_repository
+from app.api.v1.models.response import StandardResponse
+from app.auth.dependencies import (
+    require_authenticated_user,
+    require_organization_access,
+    require_role,
+)
+from app.auth.models import Role
+from app.auth.permissions import Permission
 from app.core.exceptions import EntityNotFound
 from app.models.organization import Organization
-from app.persistence.mongodb.repositories.organization_repository import OrganizationRepository
-from app.auth.dependencies import require_authenticated_user, require_organization_access, require_role
-from app.auth.permissions import Permission
-from app.auth.models import Role
-from app.api.v1.models.response import StandardResponse
+from app.persistence.mongodb.repositories.organization_repository import (
+    OrganizationRepository,
+)
 
 router = APIRouter(
-    prefix="/organizations", 
+    prefix="/organizations",
     tags=["Organizations"],
-    dependencies=[Depends(require_authenticated_user())]
+    dependencies=[Depends(require_authenticated_user())],
 )
 
 
@@ -33,21 +39,24 @@ async def create_organization(
     org: Organization,
     request: Request,
     repo: OrganizationRepository = Depends(get_organization_repository),
-    audit_repo = Depends(get_audit_repository),
+    audit_repo=Depends(get_audit_repository),
 ) -> StandardResponse[Organization]:
     """Create organization."""
     created = await repo.create(org)
-    
+
     from app.auth.models import AuditEvent
+
     user_id_str = getattr(request.state, "user_id", "")
-    await audit_repo.log_event(AuditEvent(
-        request_id=getattr(request.state, "request_id", ""),
-        user_id=user_id_str if user_id_str else None,
-        organization_id=str(created.id),
-        action="create_organization",
-        result="success"
-    ))
-    
+    await audit_repo.log_event(
+        AuditEvent(
+            request_id=getattr(request.state, "request_id", ""),
+            user_id=user_id_str if user_id_str else None,
+            organization_id=str(created.id),
+            action="create_organization",
+            result="success",
+        )
+    )
+
     return StandardResponse(
         success=True,
         data=created,
@@ -106,7 +115,9 @@ async def get_organization(
     response_model=StandardResponse[Organization],
     summary="Update an organization",
     description="Partially updates an existing organization.",
-    dependencies=[Depends(require_organization_access(Permission.MANAGE_ORGANIZATIONS))],
+    dependencies=[
+        Depends(require_organization_access(Permission.MANAGE_ORGANIZATIONS))
+    ],
 )
 async def update_organization(
     organization_id: UUID,
@@ -117,8 +128,9 @@ async def update_organization(
     """Update organization."""
     if organization_id != org_update.id:
         from fastapi import HTTPException
+
         raise HTTPException(status_code=400, detail="ID in path must match ID in body.")
-    
+
     updated_org = await repo.update(org_update)
     if not updated_org:
         raise EntityNotFound("Organization", str(organization_id))

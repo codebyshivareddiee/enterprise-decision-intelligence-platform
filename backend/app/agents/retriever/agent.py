@@ -57,7 +57,9 @@ class RetrieverAgent(BaseAgent):
             chunks.append(
                 RetrievedChunk(
                     text=res.chunk.content,
-                    asset_id=str(res.chunk.metadata.get("asset_id", str(res.chunk.asset_id))),
+                    asset_id=str(
+                        res.chunk.metadata.get("asset_id", str(res.chunk.asset_id))
+                    ),
                     score=res.score,
                     metadata=res.chunk.metadata,
                 )

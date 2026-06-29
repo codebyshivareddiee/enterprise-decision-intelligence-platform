@@ -2,13 +2,13 @@
 
 from typing import Any, Literal
 
+import structlog
 from langgraph.graph import END, START, StateGraph
 from langgraph.types import Send
 
 from app.agents.planner.schemas import FailureStrategy, WorkflowArtifact
 from app.workflow.context import ExecutionContext
 from app.workflow.models import WorkflowState
-import structlog
 
 logger = structlog.get_logger(__name__)
 
@@ -40,16 +40,18 @@ class WorkflowGraphBuilder:
                 produces=node_def.produces,
             ):
                 async def node_wrapper(state: WorkflowState) -> dict[str, Any]:
-                    import time
                     import inspect
-                    
+                    import time
+
                     start_time = time.time()
                     logger.info(f"[{step_to_wrap.step_id}] Started execution...")
-                    
+
                     consumed_names = [a.value for a in consumes]
                     if consumed_names:
-                        logger.debug(f"[{step_to_wrap.step_id}] Consuming artifacts: {consumed_names}")
-                    
+                        logger.debug(
+                            f"[{step_to_wrap.step_id}] Consuming artifacts: {consumed_names}"
+                        )
+
                     updates: dict[str, Any] = {}
 
                     # Validate consumes
@@ -58,7 +60,10 @@ class WorkflowGraphBuilder:
                         if getattr(state, field_name, None) is None:
                             error_msg = f"Missing artifact {artifact.value} for step {step_to_wrap.step_id}"
                             logger.error(f"[{step_to_wrap.step_id}] ERROR: {error_msg}")
-                            if step_to_wrap.failure_strategy == FailureStrategy.FAIL_PLAN:
+                            if (
+                                step_to_wrap.failure_strategy
+                                == FailureStrategy.FAIL_PLAN
+                            ):
                                 return {
                                     "failed_steps": [step_to_wrap.step_id],
                                     "errors": [error_msg],
@@ -101,66 +106,109 @@ class WorkflowGraphBuilder:
                         if isinstance(node_updates, WorkflowState):
                             dumped = node_updates.model_dump()
                             produced_keys = {a.value.lower() for a in produces}
-                            node_updates = {k: dumped[k] for k in produced_keys if k in dumped}
-                            
+                            node_updates = {
+                                k: dumped[k] for k in produced_keys if k in dumped
+                            }
+
                         if isinstance(node_updates, dict):
                             # Allow whatever the agent explicitly put in the dict, plus our extracted produces
                             updates.update(node_updates)
-                            
+
                         # Validate produces
                         produced_names = [a.value for a in produces]
                         if produced_names:
-                            logger.debug(f"[{step_to_wrap.step_id}] Expected to produce: {produced_names}")
-                            
+                            logger.debug(
+                                f"[{step_to_wrap.step_id}] Expected to produce: {produced_names}"
+                            )
+
                         for artifact in produces:
                             field_name = artifact.value.lower()
-                            if updates.get(field_name) is None and getattr(state, field_name, None) is None:
-                                raise ValueError(f"Agent failed to produce declared artifact: {artifact.value}")
+                            if (
+                                updates.get(field_name) is None
+                                and getattr(state, field_name, None) is None
+                            ):
+                                raise ValueError(
+                                    f"Agent failed to produce declared artifact: {artifact.value}"
+                                )
 
                         # Add completion tracking
                         updates["completed_steps"] = [step_to_wrap.step_id]
-                        
+
                         execution_time = time.time() - start_time
-                        logger.info(f"[{step_to_wrap.step_id}] Success in {execution_time:.2f}s")
 
-                        # Update step status in DB to completed
-                        if decision_id_str:
-                            try:
-                                from app.persistence.mongodb.client import get_mongo_client
-                                from app.config.settings import get_settings
-                                from app.persistence.mongodb.repositories.recommendation_repository import RecommendationRepository
-                                from uuid import UUID
+                        from app.core.metrics import (
+                            AGENT_ARTIFACTS,
+                            AGENT_DURATION,
+                            AGENT_EXECUTIONS_TOTAL,
+                        )
 
-                                db_client = get_mongo_client()
-                                settings = get_settings()
-                                db = db_client[settings.mongodb_db_name]
-                                rec_repo = RecommendationRepository(db)
-                                rec = await rec_repo.get_by_id(UUID(decision_id_str))
-                                if rec:
-                                    updated_plan = []
-                                    for step_dict in rec.plan_snapshot:
-                                        if step_dict.get("step_id") == step_to_wrap.step_id:
-                                            step_dict["status"] = "completed"
-                                            step_dict["time"] = f"{execution_time:.2f}s"
-                                        updated_plan.append(step_dict)
-                                    rec.plan_snapshot = updated_plan
-                                    await rec_repo.update(rec)
-                            except Exception as db_err:
-                                logger.error(f"Failed to update step completed status in DB: {db_err}")
-                        
+                        AGENT_EXECUTIONS_TOTAL.labels(
+                            agent_type=step_to_wrap.agent_name, status="success"
+                        ).inc()
+                        AGENT_DURATION.labels(
+                            agent_type=step_to_wrap.agent_name
+                        ).observe(execution_time)
+                        AGENT_ARTIFACTS.labels(
+                            agent_type=step_to_wrap.agent_name,
+                            artifact_action="consumed",
+                        ).inc(len(consumes))
+                        AGENT_ARTIFACTS.labels(
+                            agent_type=step_to_wrap.agent_name,
+                            artifact_action="produced",
+                        ).inc(len(produces))
+
+                        logger.info(
+                            f"[{step_to_wrap.step_id}] Success in {execution_time:.2f}s",
+                            agent_type=step_to_wrap.agent_name,
+                            execution_duration_ms=round(execution_time * 1000, 2),
+                            success=True,
+                            artifacts_consumed=len(consumes),
+                            artifacts_produced=len(produces),
+                        )
+
                         available_artifacts = [
-                            art.value for art in WorkflowArtifact 
-                            if getattr(state, art.value.lower(), None) is not None or art.value.lower() in updates
+                            art.value
+                            for art in WorkflowArtifact
+                            if getattr(state, art.value.lower(), None) is not None
+                            or art.value.lower() in updates
                         ]
-                        logger.debug(f"[{step_to_wrap.step_id}] WorkflowState now contains: {available_artifacts}")
-                        
+                        logger.debug(
+                            f"[{step_to_wrap.step_id}] WorkflowState now contains: {available_artifacts}"
+                        )
+
                         return updates
 
                     except Exception as e:
                         execution_time = time.time() - start_time
+
+                        from app.core.metrics import (
+                            AGENT_ARTIFACTS,
+                            AGENT_DURATION,
+                            AGENT_EXECUTIONS_TOTAL,
+                        )
+
+                        AGENT_EXECUTIONS_TOTAL.labels(
+                            agent_type=step_to_wrap.agent_name, status="error"
+                        ).inc()
+                        AGENT_DURATION.labels(
+                            agent_type=step_to_wrap.agent_name
+                        ).observe(execution_time)
+                        AGENT_ARTIFACTS.labels(
+                            agent_type=step_to_wrap.agent_name,
+                            artifact_action="consumed",
+                        ).inc(len(consumes))
+
                         error_msg = f"Step {step_to_wrap.step_id} failed: {str(e)}"
-                        logger.error(f"[{step_to_wrap.step_id}] Failed in {execution_time:.2f}s: {error_msg}")
-                        
+                        logger.error(
+                            f"[{step_to_wrap.step_id}] Failed in {execution_time:.2f}s: {error_msg}",
+                            agent_type=step_to_wrap.agent_name,
+                            execution_duration_ms=round(execution_time * 1000, 2),
+                            success=False,
+                            failure_reason=str(e),
+                            artifacts_consumed=len(consumes),
+                            artifacts_produced=0,
+                        )
+
                         error_updates: dict[str, Any] = {
                             "failed_steps": [step_to_wrap.step_id],
                             "errors": [error_msg],

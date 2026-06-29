@@ -1,7 +1,7 @@
 """Authentication and Authorization Service."""
 
+from datetime import UTC, datetime
 from typing import Any
-from datetime import datetime, timezone
 from uuid import UUID
 
 import structlog
@@ -25,8 +25,13 @@ class AuthService:
         self.audit_repo = audit_repo
 
     async def _log_audit(
-        self, action: str, result: str, user_id: str | None = None, req_id: str = "",
-        organization_id: str | None = None, workspace_id: str | None = None
+        self,
+        action: str,
+        result: str,
+        user_id: str | None = None,
+        req_id: str = "",
+        organization_id: str | None = None,
+        workspace_id: str | None = None,
     ) -> None:
         """Log an audit event both to MongoDB and via structlog."""
         event = AuditEvent(
@@ -38,7 +43,7 @@ class AuthService:
             result=result,
         )
         await self.audit_repo.log_event(event)
-        
+
         logger.info(
             "audit_event",
             action=action,
@@ -80,7 +85,9 @@ class AuthService:
         """Authenticate user and return JWT tokens."""
         user = await self.user_repo.get_by_email(request.email)
         if not user or not verify_password(request.password, user.hashed_password):
-            await self._log_audit("login", "failed - invalid credentials", req_id=req_id)
+            await self._log_audit(
+                "login", "failed - invalid credentials", req_id=req_id
+            )
             raise AuthError("Invalid email or password")
 
         payload = self._create_token_payload(user)
@@ -101,7 +108,9 @@ class AuthService:
         user_id = payload["sub"]
         user = await self.user_repo.get_by_id(UUID(user_id))
         if not user:
-            await self._log_audit("refresh", "failed - user not found", user_id, req_id=req_id)
+            await self._log_audit(
+                "refresh", "failed - user not found", user_id, req_id=req_id
+            )
             raise AuthError("Invalid user")
 
         payload_data = self._create_token_payload(user)
@@ -118,11 +127,16 @@ class AuthService:
         """Change a user's password."""
         user = await self.user_repo.get_by_id(user_id)
         if not user or not verify_password(request.old_password, user.hashed_password):
-            await self._log_audit("change_password", "failed - invalid old password", str(user_id), req_id=req_id)
+            await self._log_audit(
+                "change_password",
+                "failed - invalid old password",
+                str(user_id),
+                req_id=req_id,
+            )
             raise AuthError("Invalid old password")
 
         user.hashed_password = hash_password(request.new_password)
-        user.updated_at = datetime.now(timezone.utc)
+        user.updated_at = datetime.now(UTC)
         await self.user_repo.update(user)
 
         await self._log_audit("change_password", "success", str(user_id), req_id=req_id)

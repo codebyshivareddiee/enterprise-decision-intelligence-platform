@@ -41,7 +41,14 @@ def setup_mock_registry() -> AgentRegistry:
     # Mock Reasoning Node
     def mock_reasoning(state: WorkflowState) -> dict:
         print("[MOCK REASONING] Executing...")
-        return {"reasoning_result": {"entity_evaluations": [], "missing_information": [], "identified_risks": [], "identified_opportunities": []}}
+        return {
+            "reasoning_result": {
+                "entity_evaluations": [],
+                "missing_information": [],
+                "identified_risks": [],
+                "identified_opportunities": [],
+            }
+        }
 
     registry.register(
         agent_type=AgentType.REASONING,
@@ -54,7 +61,19 @@ def setup_mock_registry() -> AgentRegistry:
     # Mock Recommendation Node
     def mock_recommendation(state: WorkflowState) -> dict:
         print("[MOCK RECOMMENDATION] Executing...")
-        return {"recommendation": {"recommendation": {"entity_id": "123", "rank": 1, "final_score": 95.0, "contributing_factors": []}, "confidence": 0.9, "alternatives": [], "risk_level": "LOW"}}
+        return {
+            "recommendation": {
+                "recommendation": {
+                    "entity_id": "123",
+                    "rank": 1,
+                    "final_score": 95.0,
+                    "contributing_factors": [],
+                },
+                "confidence": 0.9,
+                "alternatives": [],
+                "risk_level": "LOW",
+            }
+        }
 
     registry.register(
         agent_type=AgentType.RECOMMENDATION,
@@ -67,7 +86,15 @@ def setup_mock_registry() -> AgentRegistry:
     # Mock Explanation Node (parallel with Recommendation)
     def mock_explanation(state: WorkflowState) -> dict:
         print("[MOCK EXPLANATION] Executing...")
-        return {"explanation": {"summary": "This candidate is highly recommended.", "evidence_references": [], "applied_rules": [], "confidence_reasoning": "", "cited_chunks": []}}
+        return {
+            "explanation": {
+                "summary": "This candidate is highly recommended.",
+                "evidence_references": [],
+                "applied_rules": [],
+                "confidence_reasoning": "",
+                "cited_chunks": [],
+            }
+        }
 
     registry.register(
         agent_type=AgentType.EXPLANATION,

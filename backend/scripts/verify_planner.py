@@ -26,12 +26,9 @@ async def run_scenario(
 
     plan = await planner.generate_plan(
         user_request=request,
-        organization=context["organization"],
-        workspace=context["workspace"],
-        knowledge_assets=context["knowledge_assets"],
-        knowledge_schema=context["knowledge_schema"],
-        business_rules=context["business_rules"],
-        enabled_agents=context["enabled_agents"],
+        organization=context.get("organization"),
+        workspace_decision_context=context["workspace_decision_context"],
+        enabled_agents=context.get("enabled_agents"),
     )
 
     print("\n--- DAG PLAN SUMMARY ---")
@@ -67,32 +64,6 @@ async def main():
     # Common mock context
     context = {
         "organization": {"id": "org_1", "name": "XL Ventures"},
-        "workspace": {"id": "ws_1", "name": "AI Engineering Hiring"},
-        "knowledge_schema": {
-            "fields": [
-                {"name": "candidate_name", "type": "STRING"},
-                {"name": "years_experience", "type": "INTEGER"},
-                {"name": "skills", "type": "LIST"},
-                {"name": "status", "type": "STRING"},
-            ]
-        },
-        "knowledge_assets": [
-            {"id": "doc_1", "title": "John Doe Resume", "type": "PDF"},
-            {"id": "doc_2", "title": "Jane Smith Profile", "type": "LINKEDIN"},
-            {"id": "doc_3", "title": "Role Requirements - AI Engineer", "type": "TEXT"},
-        ],
-        "business_rules": [
-            {
-                "name": "Min Experience",
-                "type": "HARD_FILTER",
-                "condition": "years_experience >= 5",
-            },
-            {
-                "name": "Required Skills",
-                "type": "HARD_FILTER",
-                "condition": "skills IN ['Python', 'OpenAI']",
-            },
-        ],
         "enabled_agents": [
             "RETRIEVER",
             "REASONING",
@@ -101,6 +72,49 @@ async def main():
             "EXPLANATION",
             "LEARNER",
         ],
+        "workspace_decision_context": {
+            "id": "ws_1",
+            "name": "AI Engineering Hiring",
+            "goal": "Hire the best AI Engineer",
+            "success_metrics": "Time to hire < 30 days",
+            "decision_points": "Evaluate Python and RAG experience",
+            "workspace_summary": {
+                "total_assets": 3,
+                "semantic_summaries": {"common_skills": ["Python", "OpenAI"]},
+            },
+            "knowledge_schema": {
+                "fields": [
+                    {"name": "candidate_name", "type": "STRING"},
+                    {"name": "years_experience", "type": "INTEGER"},
+                    {"name": "skills", "type": "LIST"},
+                    {"name": "status", "type": "STRING"},
+                ],
+                "default_chunk_strategy": "HeadingChunker",
+                "default_chunk_profile": "MEDIUM",
+                "default_retrieval_strategy": "semantic_hybrid",
+            },
+            "knowledge_assets": [
+                {"id": "doc_1", "title": "John Doe Resume", "type": "PDF"},
+                {"id": "doc_2", "title": "Jane Smith Profile", "type": "LINKEDIN"},
+                {
+                    "id": "doc_3",
+                    "title": "Role Requirements - AI Engineer",
+                    "type": "TEXT",
+                },
+            ],
+            "business_rules": [
+                {
+                    "name": "Min Experience",
+                    "type": "HARD_FILTER",
+                    "condition": "years_experience >= 5",
+                },
+                {
+                    "name": "Required Skills",
+                    "type": "HARD_FILTER",
+                    "condition": "skills IN ['Python', 'OpenAI']",
+                },
+            ],
+        },
     }
 
     # Scenario 1: Standard Hiring Pipeline (Full DAG)

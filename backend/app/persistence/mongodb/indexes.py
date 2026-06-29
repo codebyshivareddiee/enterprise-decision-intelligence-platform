@@ -201,4 +201,6 @@ async def _create_preference_profile_indexes(db: AsyncIOMotorDatabase) -> None: 
         IndexModel([("organization_id", ASCENDING)], name="pp_org_id"),
     ]
     await db[col.PREFERENCE_PROFILES].create_indexes(indexes)
-    logger.debug("mongodb.indexes.created", extra={"collection": col.PREFERENCE_PROFILES})
+    logger.debug(
+        "mongodb.indexes.created", extra={"collection": col.PREFERENCE_PROFILES}
+    )

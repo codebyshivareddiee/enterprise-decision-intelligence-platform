@@ -1,9 +1,9 @@
 """Knowledge chunkers module."""
 
+from .factory import ChunkingStrategyFactory
+from .heading_chunker import HeadingChunker
 from .single_document_chunker import SingleDocumentChunker
 from .sliding_window_chunker import SlidingWindowChunker
-from .heading_chunker import HeadingChunker
-from .factory import ChunkingStrategyFactory
 
 __all__ = [
     "SingleDocumentChunker",

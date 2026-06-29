@@ -1,13 +1,13 @@
 """Health check endpoint."""
 
 import time
-from typing import Any
+
 from fastapi import APIRouter, Depends, Request
 
 from app.api.dependencies import get_container
-from app.core.container import ServiceContainer
-from app.api.v1.models.responses import HealthResponse
 from app.api.v1.models.response import StandardResponse
+from app.api.v1.models.responses import HealthResponse
+from app.core.container import ServiceContainer
 
 router = APIRouter(prefix="/health", tags=["Health"])
 
@@ -26,11 +26,11 @@ async def check_health(
     dependencies = {
         "mongodb": {"status": "unknown"},
         "openai": {"status": "unknown"},
-        "qdrant": {"status": "unknown"}
+        "qdrant": {"status": "unknown"},
     }
-    
+
     overall_status = "READY"
-    
+
     # Check MongoDB
     try:
         await container.mongo_client.admin.command("ping")
@@ -67,7 +67,7 @@ async def check_health(
         overall_status = "UNHEALTHY"
 
     uptime_seconds = int(time.time() - container.start_time)
-    
+
     health_data = HealthResponse(
         status=overall_status,
         api_version="v1",
@@ -76,7 +76,7 @@ async def check_health(
         environment=container.settings.app_env,
         uptime_seconds=uptime_seconds,
     )
-    
+
     return StandardResponse(
         success=True,
         data=health_data,
