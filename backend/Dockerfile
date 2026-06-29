@@ -2,7 +2,7 @@
 # ──────────────────────────────────────────────────────────────────────────────
 # Stage 1: builder — install dependencies with uv
 # ──────────────────────────────────────────────────────────────────────────────
-FROM python:3.11-slim AS builder
+FROM python:3.12-slim AS builder
 
 # Install uv
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /usr/local/bin/
@@ -14,12 +14,12 @@ COPY pyproject.toml requirements.txt ./
 
 # Install runtime dependencies into a virtual environment
 RUN uv venv /opt/venv && \
-    UV_PROJECT_ENVIRONMENT=/opt/venv uv pip install --no-cache -r requirements.txt
+    VIRTUAL_ENV=/opt/venv uv pip install --no-cache -r requirements.txt
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Stage 2: runtime — lean final image
 # ──────────────────────────────────────────────────────────────────────────────
-FROM python:3.11-slim AS runtime
+FROM python:3.12-slim AS runtime
 
 # Security: run as non-root
 RUN addgroup --system appgroup && adduser --system --ingroup appgroup appuser

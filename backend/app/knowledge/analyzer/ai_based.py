@@ -17,7 +17,7 @@ class AIDocumentAnalyzer(DocumentAnalyzer):
     """Uses LLM to analyze document and select optimal processing strategy."""
 
     def __init__(
-        self, client: AsyncOpenAI | None = None, model: str = "gpt-4o-mini"
+        self, client: AsyncOpenAI | None = None, model: str = "gpt-4o"
     ) -> None:
         self.client = client or AsyncOpenAI()
         self.model = model
@@ -67,7 +67,9 @@ class AIDocumentAnalyzer(DocumentAnalyzer):
             '  "detected_document_type": "string (e.g. Policy, Resume, Technical Spec)",\n'
             '  "detected_language": "string",\n'
             '  "estimated_complexity": "string (Low, Medium, High)",\n'
-            '  "requires_human_confirmation": boolean\n'
+            '  "requires_human_confirmation": boolean,\n'
+            '  "suggested_lifecycle": ["list of strings"],\n'
+            '  "suggested_metadata": ["list of strings"]\n'
             "}"
         )
 
@@ -114,6 +116,8 @@ class AIDocumentAnalyzer(DocumentAnalyzer):
                 requires_human_confirmation=bool(
                     data.get("requires_human_confirmation", False)
                 ),
+                suggested_lifecycle=data.get("suggested_lifecycle", []),
+                suggested_metadata=data.get("suggested_metadata", []),
             )
         except Exception as e:
             # Fallback gracefully

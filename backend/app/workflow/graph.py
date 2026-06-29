@@ -48,8 +48,18 @@ class WorkflowGraphBuilder:
 
                     consumed_names = [a.value for a in consumes]
                     if consumed_names:
-                        logger.debug(
-                            f"[{step_to_wrap.step_id}] Consuming artifacts: {consumed_names}"
+                        # Serialize inputs safely using pydantic if possible
+                        input_data = {}
+                        for a in consumes:
+                            val = getattr(state, a.value.lower(), None)
+                            if val and hasattr(val, "model_dump"):
+                                input_data[a.value.lower()] = val.model_dump()
+                            else:
+                                input_data[a.value.lower()] = val
+                                
+                        logger.info(
+                            f"[{step_to_wrap.step_id}] Consuming artifacts: {consumed_names}",
+                            inputs=input_data
                         )
 
                     updates: dict[str, Any] = {}
@@ -67,7 +77,10 @@ class WorkflowGraphBuilder:
                                 return {
                                     "failed_steps": [step_to_wrap.step_id],
                                     "errors": [error_msg],
-                                }
+                                 }
+
+                    # Note: We omit updating step status in DB synchronously here to avoid Motor client conflicts
+                    # in this fast-running demo workflow.
 
                     try:
                         # Invoke the actual implementation (async or sync)
@@ -147,8 +160,19 @@ class WorkflowGraphBuilder:
                             if getattr(state, art.value.lower(), None) is not None
                             or art.value.lower() in updates
                         ]
-                        logger.debug(
-                            f"[{step_to_wrap.step_id}] WorkflowState now contains: {available_artifacts}"
+                        
+                        # Serialize outputs safely for logging
+                        output_data = {}
+                        for k, v in updates.items():
+                            if v and hasattr(v, "model_dump"):
+                                output_data[k] = v.model_dump()
+                            else:
+                                output_data[k] = v
+                                
+                        logger.info(
+                            f"[{step_to_wrap.step_id}] Agent output:",
+                            updates=output_data,
+                            available_artifacts=available_artifacts
                         )
 
                         return updates

@@ -56,3 +56,4 @@ class UserResponse(BaseModel):
     memberships: list[Membership]
     created_at: datetime
     updated_at: datetime
+

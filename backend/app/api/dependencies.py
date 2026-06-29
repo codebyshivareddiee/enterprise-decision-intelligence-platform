@@ -5,6 +5,17 @@ from typing import TypeVar
 from fastapi import Depends, Request
 from motor.motor_asyncio import AsyncIOMotorDatabase  # type: ignore
 
+from app.core.container import ServiceContainer
+
+# Persistence Layer
+from app.persistence.mongodb.repositories.organization_repository import OrganizationRepository
+from app.persistence.mongodb.repositories.workspace_repository import WorkspaceRepository
+from app.persistence.mongodb.repositories.knowledge_asset_repository import KnowledgeAssetRepository
+from app.persistence.mongodb.repositories.decision_history_repository import DecisionHistoryRepository
+from app.persistence.mongodb.repositories.business_rule_repository import BusinessRuleRepository
+from app.persistence.mongodb.repositories.audit_repository import AuditRepository
+from app.persistence.mongodb.repositories.user_repository import UserRepository
+from app.persistence.mongodb.repositories.recommendation_repository import RecommendationRepository
 # Workflow Layer
 from app.agents.planner.planner import Planner
 
@@ -125,6 +136,13 @@ def get_auth_service(
 ) -> AuthService:
     """Return the AuthService."""
     return container.auth_service
+
+
+def get_recommendation_repository(
+    container: ServiceContainer = Depends(get_container),
+) -> RecommendationRepository:
+    """Return the RecommendationRepository."""
+    return container.recommendation_repo
 
 
 def get_request_context(request: Request) -> dict[str, str]:

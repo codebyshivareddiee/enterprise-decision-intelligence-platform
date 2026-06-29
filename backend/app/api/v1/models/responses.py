@@ -28,11 +28,36 @@ class KnowledgeUploadResponse(BaseModel):
     chunks_created: int
 
 
+class KnowledgeAnalyzeResponse(BaseModel):
+    """Response returning AI analysis recommendations without indexing."""
+
+    schema_selected: UUID | None
+    schema_name: str | None
+    chunking_strategy: str
+    chunk_profile: str
+    confidence: float
+    processing_reasoning: str
+    selection_method: str
+    suggested_lifecycle: list[str]
+    suggested_metadata: list[str]
+
+
 class KnowledgeSearchResponse(BaseModel):
     """Response containing search results."""
 
     results: list[dict[str, Any]]
     metadata: dict[str, Any]
+
+
+class EvidenceItem(BaseModel):
+    """Safe DTO representing a retrieved chunk of evidence."""
+
+    asset_id: str
+    asset_name: str | None = None
+    chunk_id: str | None = None
+    chunk_preview: str
+    relevance_score: float | None = None
+    metadata: dict[str, Any] | None = None
 
 
 class WorkflowExecuteResponse(BaseModel):
@@ -45,6 +70,7 @@ class WorkflowExecuteResponse(BaseModel):
     recommendation: dict[str, Any] | None
     explanation: str | None
     execution_trace: list[dict[str, Any]]
+    supporting_evidence: list[EvidenceItem] | None = None
 
 
 class WorkflowStatusResponse(BaseModel):
@@ -57,3 +83,23 @@ class WorkflowStatusResponse(BaseModel):
     failed_nodes: list[str]
     current_node: str | None
     execution_trace: list[dict[str, Any]]
+
+
+class WorkspaceResponse(BaseModel):
+    """Response payload representing a Workspace."""
+    
+    id: UUID
+    created_at: Any
+    updated_at: Any
+    organization_id: UUID
+    name: str
+    description: str | None
+    status: str
+    knowledge_schema_id: UUID | None
+    owner_id: UUID
+    selected_knowledge_asset_ids: list[UUID]
+    qdrant_collection_name: str | None
+    goal: str | None
+    success_metrics: str | None
+    decision_points: str | None
+    workspace_summary: dict[str, object] | None

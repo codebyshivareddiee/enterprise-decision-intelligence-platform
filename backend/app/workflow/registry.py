@@ -65,3 +65,52 @@ class AgentRegistry:
     def is_registered(self, agent_type: AgentType) -> bool:
         """Check if an agent type is registered."""
         return agent_type in self._registry
+
+def build_default_registry(knowledge_manager=None, ai_manager=None) -> AgentRegistry:
+    """Helper to build a registry with all default agents."""
+    from app.agents.retriever.agent import RetrieverAgent
+    from app.agents.reasoning.agent import ReasoningAgent
+    from app.agents.recommendation.agent import RecommendationAgent
+    from app.agents.rule_checker.agent import RuleCheckerAgent
+    from app.agents.explanation.agent import ExplanationAgent
+    
+    registry = AgentRegistry()
+    
+    registry.register(
+        agent_type=AgentType.RETRIEVER,
+        node_implementation=RetrieverAgent(knowledge_manager=knowledge_manager).execute,
+        consumes=[WorkflowArtifact.USER_REQUEST],
+        produces=[WorkflowArtifact.RETRIEVED_CHUNKS],
+        description="Retrieves knowledge chunks"
+    )
+    registry.register(
+        agent_type=AgentType.REASONING,
+        node_implementation=ReasoningAgent(ai_manager=ai_manager).execute,
+        consumes=[WorkflowArtifact.RETRIEVED_CHUNKS],
+        produces=[WorkflowArtifact.REASONING_RESULT],
+        description="Applies reasoning to retrieved chunks"
+    )
+    registry.register(
+        agent_type=AgentType.RECOMMENDATION,
+        node_implementation=RecommendationAgent(ai_manager=ai_manager).execute,
+        consumes=[WorkflowArtifact.REASONING_RESULT],
+        produces=[WorkflowArtifact.RECOMMENDATION],
+        description="Produces final recommendation"
+    )
+    registry.register(
+        agent_type=AgentType.RULE_CHECKER,
+        node_implementation=RuleCheckerAgent().execute,
+        consumes=[WorkflowArtifact.RECOMMENDATION],
+        produces=[WorkflowArtifact.VALIDATION_RESULT],
+        description="Validates recommendation against business rules"
+    )
+    registry.register(
+        agent_type=AgentType.EXPLANATION,
+        node_implementation=ExplanationAgent(ai_manager=ai_manager).execute,
+        consumes=[WorkflowArtifact.RECOMMENDATION],
+        produces=[WorkflowArtifact.EXPLANATION],
+        description="Provides natural language explanation"
+    )
+    
+    return registry
+

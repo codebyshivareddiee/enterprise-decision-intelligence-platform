@@ -15,11 +15,15 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login")
 
 
 async def get_current_user(
+    request: Request,
     token: str = Depends(oauth2_scheme),
     auth_service: AuthService = Depends(get_auth_service),
 ) -> User:
     try:
         user = await auth_service.get_current_user(token)
+        request.state.user_id = str(user.id)
+        if user.organization_ids:
+            request.state.organization_id = str(user.organization_ids[0])
         return user
     except AuthError as e:
         raise e
@@ -108,6 +112,9 @@ def require_workspace_access(permission: Permission):
         if not applicable_role:
             # Fallback to org level if they have access to the org this workspace belongs to
             org_id_str = request.path_params.get("organization_id")
+            if not org_id_str:
+                org_id_str = getattr(request.state, "organization_id", None)
+                
             if org_id_str:
                 try:
                     org_id = UUID(org_id_str)

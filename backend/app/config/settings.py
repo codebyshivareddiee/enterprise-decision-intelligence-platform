@@ -27,7 +27,7 @@ class Settings(BaseSettings):
     app_port: int = 8000
     app_debug: bool = True
     app_log_level: str = "INFO"
-    app_cors_origins: str | list[str] = ["http://localhost:3000"]
+    app_cors_origins: str | list[str] = ["http://localhost:5173"]
     secret_key: str = "change-me"
 
     # ── Authentication & Authorization ───────────────────────────────────────
@@ -44,6 +44,7 @@ class Settings(BaseSettings):
     qdrant_url: str = "http://localhost:6333"
     qdrant_api_key: str = ""
     qdrant_collection_name: str = "knowledge_chunks"
+
 
     # ── OpenAI ───────────────────────────────────────────────────────────────
     openai_api_key: str = ""

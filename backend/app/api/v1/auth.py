@@ -17,6 +17,7 @@ from app.auth.schemas import (
 )
 from app.auth.service import AuthService
 
+
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
 
@@ -115,3 +116,4 @@ async def change_password(
         message="Password changed successfully",
         request_id=req_id,
     )
+

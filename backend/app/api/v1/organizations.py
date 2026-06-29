@@ -2,22 +2,24 @@
 
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, Request, HTTPException
 
-from app.api.dependencies import get_audit_repository, get_organization_repository
+from app.api.dependencies import get_audit_repository, get_organization_repository, get_user_repository
 from app.api.v1.models.response import StandardResponse
+from app.api.v1.models.requests import OrganizationCreateRequest
 from app.auth.dependencies import (
     require_authenticated_user,
     require_organization_access,
     require_role,
 )
-from app.auth.models import Role
+from app.auth.models import Role, User
 from app.auth.permissions import Permission
 from app.core.exceptions import EntityNotFound
 from app.models.organization import Organization
 from app.persistence.mongodb.repositories.organization_repository import (
     OrganizationRepository,
 )
+from app.persistence.mongodb.repositories.user_repository import UserRepository
 
 router = APIRouter(
     prefix="/organizations",
@@ -32,17 +34,45 @@ router = APIRouter(
     summary="Create a new organization",
     description="Registers a new organization within the platform.",
     status_code=201,
-    # Only Platform Admin or Organization Admin can create orgs
-    dependencies=[Depends(require_role(Role.PLATFORM_ADMIN))],
 )
 async def create_organization(
-    org: Organization,
+    org_req: OrganizationCreateRequest,
     request: Request,
+    current_user: User = Depends(require_authenticated_user()),
     repo: OrganizationRepository = Depends(get_organization_repository),
+    user_repo: UserRepository = Depends(get_user_repository),
     audit_repo=Depends(get_audit_repository),
 ) -> StandardResponse[Organization]:
     """Create organization."""
+    if current_user.memberships:
+        if not any(m.role == Role.PLATFORM_ADMIN for m in current_user.memberships):
+            raise HTTPException(
+                status_code=403,
+                detail="You already belong to an organization. Only Platform Admins can create multiple organizations."
+            )
+
+    import re
+    slug = re.sub(r'[^a-z0-9]+', '-', org_req.name.lower()).strip('-')
+
+    org = Organization(
+        name=org_req.name,
+        slug=slug,
+        contact_email=current_user.email,
+        metadata={"description": org_req.description or ""} if org_req.description else {},
+    )
     created = await repo.create(org)
+
+    # Automatically add membership for the creator
+    from app.auth.models import Membership
+    membership = Membership(
+        organization_id=created.id,
+        role=Role.ORGANIZATION_ADMIN
+    )
+    current_user.memberships.append(membership)
+    if created.id not in current_user.organization_ids:
+        current_user.organization_ids.append(created.id)
+    
+    await user_repo.update(current_user)
 
     from app.auth.models import AuditEvent
 

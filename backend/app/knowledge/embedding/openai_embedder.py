@@ -18,7 +18,10 @@ class OpenAIEmbedder(DenseEmbedder):
             client: An optional AsyncOpenAI client. If None, it will be instantiated.
             model: The OpenAI embedding model to use.
         """
-        self.client = client or AsyncOpenAI()
+        from app.config.settings import get_settings
+        settings = get_settings()
+        api_key = settings.openai_api_key or "sk-placeholder-key-for-bootstrap"
+        self.client = client or AsyncOpenAI(api_key=api_key)
         self.model = model
 
     async def embed_chunks(self, chunks: list[str]) -> list[list[float]]:

@@ -57,11 +57,7 @@ async def main() -> None:
             print("\n--- Testing POST /organizations ---")
             org_payload = {
                 "name": "Acme Corp",
-                "slug": "acme-corp",
-                "contact_email": "admin@acmecorp.com",
-                "industry": "Manufacturing",
-                "size": "ENTERPRISE",
-                "status": "ACTIVE",
+                "description": "Acme Corporation Onboarding",
             }
             response = await client.post("/organizations", json=org_payload)
             print(f"Status: {response.status_code}")
@@ -73,15 +69,11 @@ async def main() -> None:
             # 3. Create Workspace
             print("\n--- Testing POST /workspaces ---")
             ws_payload = {
-                "organization_id": org_id,
-                "owner_id": str(uuid.uuid4()),
                 "name": "Factory Automation Hub",
                 "description": "Managing automation decisions",
-                "status": "active",
                 "goal": "Optimize factory operations",
                 "success_metrics": "Reduced downtime",
                 "decision_points": "Cost vs uptime",
-                "workspace_summary": {},
             }
             response = await client.post("/workspaces", json=ws_payload)
             print(f"Status: {response.status_code}")
@@ -90,7 +82,25 @@ async def main() -> None:
             assert response.status_code == 201, "Create workspace failed"
             ws_id = ws_data["data"]["id"]
 
-            # 4. Upload Knowledge
+            # 4. Analyze Knowledge
+            print("\n--- Testing POST /knowledge/analyze ---")
+            files = {
+                "file": (
+                    "test_doc.txt",
+                    b"This is a test document about factory machines. It should be analyzed.",
+                    "text/plain",
+                )
+            }
+            analyze_data = {
+                "organization_id": org_id,
+                "description": "Test factory documentation for analysis",
+            }
+            response = await client.post("/knowledge/analyze", data=analyze_data, files=files)
+            print(f"Status: {response.status_code}")
+            print(f"Body: {response.json()}")
+            assert response.status_code == 200, "Analyze knowledge failed"
+
+            # 5. Upload Knowledge
             print("\n--- Testing POST /knowledge/upload ---")
             # We need a dummy file
             files = {
@@ -110,7 +120,7 @@ async def main() -> None:
             print(f"Body: {response.json()}")
             assert response.status_code == 200, "Upload knowledge failed"
 
-            # 5. Search Knowledge
+            # 6. Search Knowledge
             print("\n--- Testing POST /knowledge/search ---")
             response = await client.post(
                 "/knowledge/search",
@@ -124,7 +134,7 @@ async def main() -> None:
             print(f"Body: {response.json()}")
             assert response.status_code == 200, "Search knowledge failed"
 
-            # 6. Execute Decision Workflow
+            # 7. Execute Decision Workflow
             print("\n--- Testing POST /decisions/execute ---")
             execute_payload = {
                 "workspace_id": ws_id,
@@ -139,7 +149,7 @@ async def main() -> None:
             if response.status_code == 200:
                 decision_id = exec_data["decision_id"]
 
-                # 7. Record Outcome
+                # 8. Record Outcome
                 print("\n--- Testing POST /decisions/outcome ---")
                 outcome_payload = {
                     "decision_id": decision_id,

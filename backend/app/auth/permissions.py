@@ -27,6 +27,7 @@ ROLE_PERMISSIONS: dict[Role, set[Permission]] = {
         Permission.MANAGE_ORGANIZATIONS,
         Permission.MANAGE_WORKSPACES,
         Permission.MANAGE_USERS,
+        Permission.MANAGE_WORKSPACE,
     },
     Role.WORKSPACE_ADMIN: {
         Permission.MANAGE_WORKSPACE,
