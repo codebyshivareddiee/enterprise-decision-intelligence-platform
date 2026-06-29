@@ -2,9 +2,13 @@
 
 ## 1. Project Overview
 
-We built an **Enterprise Decision Intelligence Platform**. This isn't just another RAG chatbot. Our goal was to give companies a safe way to use AI for high-stakes decisions. 
+Modern enterprises make thousands of high-impact decisions every day—from selecting AI vendors and approving procurement requests to evaluating policies and managing compliance. While Large Language Models (LLMs) are powerful, they struggle to make reliable enterprise decisions because they often lack business context, organizational goals, decision rules, and explainable reasoning. Traditional RAG systems improve retrieval but still operate primarily as question-answering systems rather than structured decision-making platforms.
 
-Instead of letting an AI loose on an entire corporate wiki, we force users to create focused "Workspaces." A Workspace acts as a sandbox containing only the specific knowledge needed for that decision. Inside this sandbox, a team of specialized AI agents pulls data, runs logic, and makes a recommendation. Crucially, the AI never has the final say. It surfaces evidence and explains its reasoning, but a human expert always reviews and approves the final outcome. 
+Our solution is an **Enterprise Decision Intelligence Platform** that transforms organizational knowledge into a governed decision-making system. Instead of searching across an entire corporate knowledge base, organizations first build a centralized **Knowledge Library**, then create **Decision Workspaces** that define a specific business objective through goals, success metrics, business rules, decision points, and only the knowledge relevant to that decision.
+
+When a user submits a decision request, the platform orchestrates a team of specialized AI agents that retrieve only workspace-approved knowledge, evaluate business rules, reason over the evidence, and generate a transparent recommendation supported by citations. Every recommendation remains human-in-the-loop, ensuring that AI assists decision makers rather than replacing them.
+
+This architecture enables organizations to make context-aware, explainable, auditable, and reusable business decisions, turning enterprise knowledge into an intelligent decision system instead of another conversational chatbot.
 
 ---
 
@@ -24,6 +28,8 @@ Knowledge is stored centrally but accessed locally through isolated Workspaces. 
 
 ![Enterprise Architecture](Diagrams/Architecture.png)
 
+Access here: https://drive.google.com/file/d/1ildJXlPriw7_WHDDOw8rmSkE5BCSFUqs/view?usp=sharing
+
 This diagram shows how we layered the system. The biggest takeaway here is that clients never talk directly to the LLM. Everything routes through a strict API orchestration layer.
 
 We also split our storage. Qdrant holds all the semantic vector data, which is great for similarity search but terrible for exact relationships. MongoDB holds our relational data, business rules, and immutable audit trails. 
@@ -41,6 +47,8 @@ By keeping the "Workspace Context" at the center of the architecture, we build a
 ### Diagram 2 — Knowledge Ingestion & Indexing Pipeline
 
 ![Knowledge Ingestion Pipeline](Diagrams/Knowledge%20Ingestion%20&%20Indexing%20Pipeline.png)
+
+Access here : https://drive.google.com/file/d/1UoLC8VzahuOk5oGtnw_zRzpfhOuZtKH2/view?usp=sharing
 
 Most RAG systems blindly chop up documents and throw them into a vector database. That doesn't work well for complex enterprise data like financial reports or HR policies. 
 
@@ -60,6 +68,8 @@ Once we know what the document is, our configurable schemas dictate exactly how 
 
 ![Decision Execution Pipeline](Diagrams/Decision%20Intelligence%20Execution%20Pipeline.png)
 
+Access here : https://drive.google.com/file/d/1oHyPokjUHb3vdDwLpKcubBLjY_a2JX7h/view?usp=sharing
+
 This is how a decision actually gets made. Notice that it’s a strict workflow, not a chat window. 
 
 Everything starts with the Workspace Context. First, a Planner agent builds a step-by-step execution strategy. This forces the downstream agents to follow a logical path instead of guessing. Before the AI even attempts to reason, we run the data through hard, deterministic business rules. If a candidate fails a rule (e.g., "Budget > $50k"), we drop it immediately. This saves expensive LLM compute and prevents the AI from hallucinating a bad recommendation.
@@ -77,8 +87,6 @@ When the AI finally makes a recommendation, we force it to provide a clear expla
 
 ## 4. Key Design Decisions ⭐⭐⭐⭐⭐
 
-> [!NOTE]
-> These are the specific choices we made to build a platform that companies would actually trust, rather than just another AI prototype.
 
 ### Organization-Centric Knowledge Library
 **Problem:** Company knowledge is usually scattered and duplicated across a dozen different tools.
