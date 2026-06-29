@@ -91,7 +91,7 @@ export default function App() {
     if (!newWsName.trim()) return;
 
     const orgId = user.organization_ids?.[0];
-    const newWs = await api.createWorkspace(orgId, newWsName, newWsDesc);
+    const newWs = await api.createWorkspace(orgId, newWsName, newWsDesc, user.id);
     setNewWsName('');
     setNewWsDesc('');
     setShowCreateWsModal(false);

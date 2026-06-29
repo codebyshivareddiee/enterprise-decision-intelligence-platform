@@ -17,7 +17,7 @@ class AIDocumentAnalyzer(DocumentAnalyzer):
     """Uses LLM to analyze document and select optimal processing strategy."""
 
     def __init__(
-        self, client: AsyncOpenAI | None = None, model: str = "gpt-4o-mini"
+        self, client: AsyncOpenAI | None = None, model: str = "gpt-4o"
     ) -> None:
         self.client = client or AsyncOpenAI()
         self.model = model

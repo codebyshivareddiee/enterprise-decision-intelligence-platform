@@ -3,6 +3,7 @@
 import uuid
 import logging
 from uuid import UUID
+from typing import Any
 
 from fastapi import APIRouter, Depends, Request, BackgroundTasks
 from langgraph.checkpoint.memory import MemorySaver
@@ -308,16 +309,27 @@ async def record_outcome(
     request: DecisionOutcomeRequest,
     req: Request,
     repo: DecisionHistoryRepository = Depends(get_decision_history_repository),
+    recommendation_repo: RecommendationRepository = Depends(get_recommendation_repository),
     audit_repo=Depends(get_audit_repository),
 ) -> StandardResponse[DecisionHistory]:
     """Record a final human decision for a given execution."""
+    rec = await recommendation_repo.get_by_id(request.decision_id)
+    if not rec:
+        raise EntityNotFound("Recommendation", str(request.decision_id))
+
+    # Append new decision history record
+    user_id_str = getattr(req.state, "user_id", None)
+    try:
+        user_id = UUID(user_id_str) if user_id_str and user_id_str != "unknown" else uuid.uuid4()
+    except ValueError:
+        user_id = uuid.uuid4()
 
     decision = DecisionHistory(
-        organization_id=uuid.uuid4(),  # Mocked org_id
-        workspace_id=uuid.uuid4(),  # Mocked workspace_id
+        organization_id=rec.organization_id,
+        workspace_id=rec.workspace_id,
         recommendation_id=request.decision_id,
-        asset_id=uuid.uuid4(),  # Mocked asset
-        decided_by=uuid.uuid4(),  # Mocked user
+        asset_id=rec.entities[0].asset_id if rec.entities else uuid.uuid4(),
+        decided_by=user_id,
         outcome=(
             DecisionOutcome.APPROVED
             if "approve" in request.human_decision.lower()
@@ -329,10 +341,16 @@ async def record_outcome(
 
     created = await repo.create(decision)
 
+    # Sync overall recommendation status
+    rec.status = RecommendationStatus.COMPLETED
+    await recommendation_repo.update(rec)
+
     await audit_repo.log_event(
         AuditEvent(
             request_id=getattr(req.state, "request_id", ""),
-            user_id=getattr(req.state, "user_id", None),
+            user_id=str(user_id),
+            organization_id=str(rec.organization_id),
+            workspace_id=str(rec.workspace_id),
             action="record_decision_outcome",
             result="success",
         )
