@@ -33,6 +33,8 @@ class ReasoningAgent(BaseAgent):
 
     async def execute(self, state: WorkflowState) -> WorkflowState:
         self.validate_inputs(state)
+        
+        await self.emit_progress(state, "Comparing security capabilities and evaluating context...")
 
         prompt_content = self._prompt_template.render(
             workspace_context=(
@@ -56,6 +58,8 @@ class ReasoningAgent(BaseAgent):
             system_prompt="You are a strict reasoning engine. Do not recommend, only evaluate.",
             temperature=0.2,
         )
+        
+        await self.emit_progress(state, "Ranking options and extracting insights...")
 
         if not isinstance(result, ReasoningResult):
             raise TypeError("AIManager returned invalid type, expected ReasoningResult")

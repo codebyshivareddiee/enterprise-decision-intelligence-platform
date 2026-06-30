@@ -1,5 +1,7 @@
 """Script to verify Authentication & Authorization."""
 
+
+
 import asyncio
 import sys
 import uuid
@@ -8,7 +10,7 @@ from dotenv import load_dotenv
 load_dotenv()
 import httpx
 from httpx import ASGITransport
-
+from httpx import ASGITransport
 from app.main import app, lifespan
 
 BASE_URL = "http://testserver/api/v1"

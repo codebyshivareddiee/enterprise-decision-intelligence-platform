@@ -7,7 +7,8 @@ class EntityEvaluation(BaseModel):
     """Reasoning score and notes for a specific entity."""
 
     entity_id: str = Field(description="The ID of the entity being evaluated")
-    ai_score: float = Field(description="AI evaluation score for this entity")
+    entity_name: str = Field(description="The name of the entity being evaluated")
+    ai_score: float = Field(description="AI evaluation score for this entity, normalized between 0.0 and 1.0", ge=0.0, le=1.0)
     reasoning_notes: str = Field(
         description="Detailed notes on why this score was given"
     )

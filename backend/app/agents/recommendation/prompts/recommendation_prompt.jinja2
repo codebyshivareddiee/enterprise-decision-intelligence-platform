@@ -10,7 +10,7 @@ Your objective is to produce a ranked recommendation based on the AI reasoning r
 
 **Entity Scores:**
 {% for score in reasoning_result.entity_evaluations %}
-- Entity: {{ score.entity_id }} (Score: {{ score.ai_score }})
+- Entity: {{ score.entity_id }} (Name: {{ score.entity_name }}) (Score: {{ score.ai_score }})
   Reasoning: {{ score.reasoning_notes }}
 {% endfor %}
 {% else %}
@@ -18,9 +18,10 @@ No reasoning results provided.
 {% endif %}
 
 **Instructions:**
-1. Generate the Next Best Actions / Recommendations.
-2. Select the top entity as the primary recommendation.
-3. Assign an overall confidence level (0.0 to 1.0).
-4. Provide a list of alternative recommendations with their ranks.
-5. Determine the risk level (LOW, MEDIUM, HIGH).
-6. NEVER explain the recommendations in natural language here, only output the structured data.
+1. Generate the Next Best Actions / Recommendations based on the Entity Scores.
+2. Produce a structured output that must include `entity_id` and `entity_name` for both the primary recommendation and any alternatives.
+3. Select the top entity as the primary recommendation.
+4. Assign an overall confidence level (0.0 to 1.0).
+5. Provide a list of alternative recommendations with their ranks.
+6. Determine the risk level (LOW, MEDIUM, HIGH).
+7. NEVER explain the recommendations in natural language here, only output the structured data.

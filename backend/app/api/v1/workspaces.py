@@ -191,10 +191,13 @@ async def attach_knowledge_assets(
     
     # 2. Fetch and validate all assets
     if attach_req.asset_ids:
-        assets = await asset_repo.get_by_ids(workspace.organization_id, attach_req.asset_ids)
+        # get_by_ids needs list of strings, so we convert UUIDs
+        asset_id_strs = [str(aid) for aid in attach_req.asset_ids]
+        # pyrefly: ignore [bad-argument-type]
+        assets = await asset_repo.get_by_ids(workspace.organization_id, asset_id_strs)
         
         found_asset_ids = {str(a.id) for a in assets}
-        missing_ids = [str(aid) for aid in attach_req.asset_ids if str(aid) not in found_asset_ids]
+        missing_ids = [aid for aid in asset_id_strs if aid not in found_asset_ids]
         
         if missing_ids:
             raise HTTPException(
@@ -203,9 +206,8 @@ async def attach_knowledge_assets(
             )
 
     # 3. Update the workspace explicitly avoiding duplicates
-    current_ids = set(str(aid) for aid in workspace.selected_knowledge_asset_ids)
+    current_ids = {str(aid) for aid in workspace.selected_knowledge_asset_ids} if workspace.selected_knowledge_asset_ids else set()
     new_ids = [aid for aid in attach_req.asset_ids if str(aid) not in current_ids]
-    
     if new_ids:
         workspace.selected_knowledge_asset_ids.extend(new_ids)
         updated_ws = await workspace_repo.update(workspace)

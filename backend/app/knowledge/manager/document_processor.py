@@ -1,5 +1,6 @@
 """Document processor."""
 
+from app.knowledge.analyzer.models import DocumentAnalysisResult
 from app.knowledge.analyzer.ai_based import AIDocumentAnalyzer
 from app.knowledge.analyzer.base import DocumentAnalyzer
 from app.knowledge.analyzer.models import resolve_chunk_profile

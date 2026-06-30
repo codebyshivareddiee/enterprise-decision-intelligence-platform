@@ -17,27 +17,8 @@ export default function Review({ workspace, decisionId, onBackToDashboard, onVie
   const loadDecision = async () => {
     setLoading(true);
     try {
-      let fetchedDecision = null;
-      if (window.__lastDecisionResult && (window.__lastDecisionResult.id === decisionId || window.__lastDecisionResult.decision_id === decisionId)) {
-        const lr = window.__lastDecisionResult;
-        fetchedDecision = {
-          id: decisionId,
-          name: `AI Evaluation: ${workspace?.goal?.substring(0, 24) || 'Decision'}...`,
-          goal: workspace?.goal || 'No goal specified',
-          status: lr.execution_status.toLowerCase(),
-          confidence: lr.recommendation?.final_score ? Math.round(lr.recommendation.final_score * 100) : 0,
-          date: new Date().toLocaleDateString(),
-          decided_by_name: 'AI Orchestrator',
-          recommended_option: lr.recommendation?.entity_id || 'Unknown',
-          explanation: lr.explanation || 'No explanation generated.',
-          evidence: lr.supporting_evidence || [],
-          rules: [],
-          workspace: workspace
-        };
-      } else {
-        fetchedDecision = await api.getDecision(decisionId);
-        fetchedDecision.workspace = workspace;
-      }
+      let fetchedDecision = await api.getDecision(decisionId);
+      fetchedDecision.workspace = workspace;
       setDecision(fetchedDecision);
     } catch (err) {
       toast.error('Failed to load decision review context.');
@@ -126,6 +107,23 @@ export default function Review({ workspace, decisionId, onBackToDashboard, onVie
               <h4>Explanation</h4>
               <p>{decision.explanation || 'Matches all business requirements including budget, security, compliance, and API capabilities.'}</p>
             </div>
+
+            {decision.alternatives && decision.alternatives.length > 0 && (
+              <div className="review-alternatives-box" style={{ marginTop: '24px', padding: '16px', background: 'rgba(0,0,0,0.2)', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
+                <h4 style={{ marginBottom: '12px', fontSize: '14px', color: 'var(--text-color)' }}>Other Options Evaluated</h4>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                  {decision.alternatives.map((alt, idx) => (
+                    <div key={idx} style={{ padding: '12px', background: 'rgba(255,255,255,0.03)', borderRadius: '6px' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
+                        <span style={{ fontWeight: '500', color: 'var(--primary-color)' }}>{alt.entity_name}</span>
+                        <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Score: {alt.score}%</span>
+                      </div>
+                      <p style={{ fontSize: '13px', color: 'var(--text-muted)', margin: 0, lineHeight: 1.5 }}>{alt.reasoning}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Supporting Evidence */}
@@ -184,22 +182,11 @@ export default function Review({ workspace, decisionId, onBackToDashboard, onVie
                 </div>
               ))}
               {(!decision.rules || decision.rules.length === 0) && (
-                <>
-                  <div className="applied-rule-row">
-                    <div className="applied-rule-left">
-                      <CheckCircle size={16} />
-                      <span>Budget Constraint</span>
-                    </div>
-                    <span className="applied-rule-status">Satisfied</span>
+                <div className="applied-rule-row" style={{ color: 'var(--text-muted)' }}>
+                  <div className="applied-rule-left">
+                    <span>No specific rules extracted.</span>
                   </div>
-                  <div className="applied-rule-row">
-                    <div className="applied-rule-left">
-                      <CheckCircle size={16} />
-                      <span>ISO 27001</span>
-                    </div>
-                    <span className="applied-rule-status">Satisfied</span>
-                  </div>
-                </>
+                </div>
               )}
             </div>
           </div>

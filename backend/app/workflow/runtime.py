@@ -23,6 +23,12 @@ class WorkflowRuntime:
         self, initial_state: WorkflowState, thread_id: str
     ) -> WorkflowState:
         """Start the execution of the workflow plan."""
+        from app.workflow.events import event_bus
+        import time
+
+        await event_bus.publish(thread_id, "workflow_started", {
+            "plan_goal": initial_state.plan.goal if initial_state.plan else "",
+        })
         config = {"configurable": {"thread_id": thread_id}}
         import time
 
@@ -53,8 +59,33 @@ class WorkflowRuntime:
                 success=True,
             )
 
+            
+            if isinstance(final_state, dict):
+                # Ensure we have the strongly typed plan to check skipped steps
+                plan = final_state.get("plan")
+                completed = final_state.get("completed_steps", [])
+                failed = final_state.get("failed_steps", [])
+            else:
+                plan = final_state.plan
+                completed = final_state.completed_steps
+                failed = final_state.failed_steps
+                
+            if plan and hasattr(plan, "execution_steps"):
+                for step in plan.execution_steps:
+                    if step.step_id not in completed and step.step_id not in failed:
+                        await event_bus.publish(thread_id, "agent_skipped", {
+                            "step_id": step.step_id,
+                            "reason": "Branch not executed."
+                        })
+                        
+            await event_bus.publish(thread_id, "workflow_completed", {
+                "duration_ms": round(duration * 1000, 2),
+                "is_interrupted": final_state.get("is_interrupted", False) if isinstance(final_state, dict) else final_state.is_interrupted,
+            })
+            
             if isinstance(final_state, dict):
                 return WorkflowState(**final_state)
+            
             return final_state
         except Exception as e:
             duration = time.time() - start_time
@@ -68,6 +99,12 @@ class WorkflowRuntime:
                 success=False,
                 error=str(e),
             )
+            
+            await event_bus.publish(thread_id, "workflow_failed", {
+                "duration_ms": round(duration * 1000, 2),
+                "error": str(e),
+            })
+            
             raise WorkflowExecutionError(f"Workflow execution failed: {str(e)}") from e
 
     async def resume(self, thread_id: str, feedback: Any = None) -> WorkflowState:
@@ -94,6 +131,9 @@ class WorkflowRuntime:
         await self.graph.aupdate_state(config, update_payload)
 
         try:
+            from app.workflow.events import event_bus
+            await event_bus.publish(thread_id, "workflow_resumed", {})
+            
             final_state = await self.graph.ainvoke(None, config=config)
 
             if isinstance(final_state, dict):

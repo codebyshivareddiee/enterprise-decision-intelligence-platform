@@ -1,18 +1,6 @@
 # Enterprise Decision Intelligence Platform
 
-## 1. Project Overview
-
-Modern enterprises make thousands of high-impact decisions every day—from selecting AI vendors and approving procurement requests to evaluating policies and managing compliance. While Large Language Models (LLMs) are powerful, they struggle to make reliable enterprise decisions because they often lack business context, organizational goals, decision rules, and explainable reasoning. Traditional RAG systems improve retrieval but still operate primarily as question-answering systems rather than structured decision-making platforms.
-
-Our solution is an **Enterprise Decision Intelligence Platform** that transforms organizational knowledge into a governed decision-making system. Instead of searching across an entire corporate knowledge base, organizations first build a centralized **Knowledge Library**, then create **Decision Workspaces** that define a specific business objective through goals, success metrics, business rules, decision points, and only the knowledge relevant to that decision.
-
-When a user submits a decision request, the platform orchestrates a team of specialized AI agents that retrieve only workspace-approved knowledge, evaluate business rules, reason over the evidence, and generate a transparent recommendation supported by citations. Every recommendation remains human-in-the-loop, ensuring that AI assists decision makers rather than replacing them.
-
-This architecture enables organizations to make context-aware, explainable, auditable, and reusable business decisions, turning enterprise knowledge into an intelligent decision system instead of another conversational chatbot.
-
----
-
-## 2. High-Level Architecture
+## 1. High-Level Architecture
 
 Our architecture revolves around strict separation of concerns. We keep the raw infrastructure separated from the orchestration logic, and we keep the orchestration completely separated from the AI prompts. 
 
@@ -22,7 +10,7 @@ Knowledge is stored centrally but accessed locally through isolated Workspaces. 
 
 ---
 
-## 3. Architecture Diagrams
+## 2. Architecture Diagrams
 
 ### Diagram 1 — Enterprise Decision Intelligence Platform Architecture
 
@@ -85,7 +73,7 @@ When the AI finally makes a recommendation, we force it to provide a clear expla
 
 ---
 
-## 4. Key Design Decisions ⭐⭐⭐⭐⭐
+## 3. Key Design Decisions ⭐⭐⭐⭐⭐
 
 
 ### Organization-Centric Knowledge Library
@@ -135,7 +123,7 @@ When the AI finally makes a recommendation, we force it to provide a clear expla
 
 ---
 
-## 5. Technology Stack
+## 4. Technology Stack
 
 | Component | Technology |
 | :--- | :--- |

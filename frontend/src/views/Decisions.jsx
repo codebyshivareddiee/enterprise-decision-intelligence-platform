@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { HelpCircle, Paperclip, Lightbulb, ArrowRight, ShieldAlert, Check, Play, PlayCircle, Loader2, Maximize2, Plus } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { HelpCircle, Paperclip, Lightbulb, ArrowRight, ShieldAlert, Check, Play, PlayCircle, Loader2, Maximize2, Plus, AlertTriangle } from 'lucide-react';
 import { api } from '../services/api';
 import { toast } from 'sonner';
 
@@ -14,78 +14,222 @@ export default function Decisions({ workspace, initialQuery, onDecisionComplete 
     { id: 'src-3', name: 'Business Rules', active: true, color: 'active-purple' }
   ]);
 
-  // Simulated execution states
-  const [activeStep, setActiveStep] = useState(0); // 0: Retriever, 1: Reasoning, 2: Recommendation, 3: Rule Checker, 4: Explanation, 5: Complete
-  const [stepStates, setStepStates] = useState([
-    { id: 0, name: 'Retriever Agent', desc: 'Retrieves relevant knowledge from selected sources.', status: 'pending', time: 'Pending', count: 'Not started', output: 'RETRIEVED_CHUNKS' },
-    { id: 1, name: 'Reasoning Agent', desc: 'Analyzes retrieved content and derives key insights.', status: 'pending', time: 'Pending', count: 'Not started', output: 'REASONING_RESULT' },
-    { id: 2, name: 'Recommendation Agent', desc: 'Generates recommendation based on reasoning and business context.', status: 'pending', time: 'Pending', count: 'Not started', output: 'RECOMMENDATION' },
-    { id: 3, name: 'Rule Checker Agent', desc: 'Validates the recommendation against business rules and constraints.', status: 'pending', time: 'Pending', count: 'Not started', output: 'VALIDATION_RESULT' },
-    { id: 4, name: 'Explanation Agent', desc: 'Creates a natural language explanation of the final decision.', status: 'pending', time: 'Pending', count: 'Not started', output: 'EXPLANATION' }
-  ]);
-
-  const [progress, setProgress] = useState(0);
+  // Dynamic execution state
+  const [graph, setGraph] = useState({ nodes: [], edges: [] });
+  const [nodeStates, setNodeStates] = useState({}); // { [stepId]: { status, startTime, endTime, stream, produced: [], consumed: [] } }
+  const [timelineEvents, setTimelineEvents] = useState([]); // { timestamp, message, type }
+  const [activeNodeId, setActiveNodeId] = useState(null);
+  
+  const [workflowState, setWorkflowState] = useState('pending'); // pending, running, completed, failed
   const [elapsedTime, setElapsedTime] = useState(0);
   const [decisionId, setDecisionId] = useState(null);
+
+  const wsRef = useRef(null);
+  const timerRef = useRef(null);
+
+  const wsReconnectTimeout = useRef(null);
+  const reconnectAttempt = useRef(0);
 
   useEffect(() => {
     if (initialQuery) {
       setQueryText(initialQuery);
     }
   }, [initialQuery]);
+  
+  useEffect(() => {
+    return () => {
+      // Cleanup on unmount
+      if (wsRef.current) {
+        wsRef.current.close();
+      }
+      if (wsReconnectTimeout.current) {
+        clearTimeout(wsReconnectTimeout.current);
+      }
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+      }
+    };
+  }, []);
+
+  // Handle WebSocket connection
+  const connectWebSocket = (id) => {
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      return; // Already connected
+    }
+
+    const apiBaseUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1';
+    const wsBaseUrl = apiBaseUrl.replace(/^http/, 'ws');
+    const wsUrl = `${wsBaseUrl}/decisions/ws/workflows/${id}`;
+    
+    const ws = new WebSocket(wsUrl);
+    wsRef.current = ws;
+
+    ws.onopen = () => {
+      console.log('Connected to workflow event stream:', id);
+      reconnectAttempt.current = 0; // Reset on successful connect
+    };
+
+    ws.onmessage = (event) => {
+      const data = JSON.parse(event.data);
+      const timeStr = new Date(data.timestamp || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      
+      if (data.type === 'workflow_started') {
+        setWorkflowState('running');
+        addTimelineEvent(timeStr, 'Workflow Started', 'info');
+      } else if (data.type === 'workflow_completed') {
+        setWorkflowState('completed');
+        addTimelineEvent(timeStr, 'Workflow Completed', 'success');
+      } else if (data.type === 'workflow_failed') {
+        setWorkflowState('failed');
+        addTimelineEvent(timeStr, 'Workflow Failed', 'error');
+      } else if (data.type === 'agent_started') {
+        setNodeStates(prev => ({
+          ...prev,
+          [data.step_id]: { ...prev[data.step_id], status: 'running', startTime: data.timestamp }
+        }));
+        setActiveNodeId(data.step_id);
+        addTimelineEvent(timeStr, `${data.agent_name} Running`, 'info');
+      } else if (data.type === 'agent_completed') {
+        setNodeStates(prev => ({
+          ...prev,
+          [data.step_id]: { 
+            ...prev[data.step_id], 
+            status: 'completed', 
+            endTime: data.timestamp,
+            duration: data.duration_ms,
+            metrics: data.metrics || {}
+          }
+        }));
+        addTimelineEvent(timeStr, `${data.agent_name} Completed`, 'success');
+      } else if (data.type === 'agent_failed') {
+        setNodeStates(prev => ({
+          ...prev,
+          [data.step_id]: { ...prev[data.step_id], status: 'failed', error: data.error }
+        }));
+        addTimelineEvent(timeStr, `${data.agent_name} Failed`, 'error');
+      } else if (data.type === 'agent_skipped') {
+        setNodeStates(prev => ({
+          ...prev,
+          [data.step_id]: { ...prev[data.step_id], status: 'skipped' }
+        }));
+        addTimelineEvent(timeStr, `Agent Skipped`, 'info');
+      } else if (data.type === 'artifact_created') {
+        setNodeStates(prev => {
+          const current = prev[data.step_id] || { produced: [] };
+          return {
+            ...prev,
+            [data.step_id]: { ...current, produced: [...(current.produced || []), data.artifact_name] }
+          };
+        });
+      } else if (data.type === 'artifact_consumed') {
+        setNodeStates(prev => {
+          const current = prev[data.step_id] || { consumed: [] };
+          return {
+            ...prev,
+            [data.step_id]: { ...current, consumed: [...(current.consumed || []), data.artifact_name] }
+          };
+        });
+      } else if (data.type === 'agent_stream') {
+        setNodeStates(prev => {
+          const current = prev[data.step_id] || {};
+          return {
+            ...prev,
+            [data.step_id]: { ...current, stream: (current.stream || '') + data.delta }
+          };
+        });
+      }
+    };
+
+    ws.onclose = () => {
+      console.log('WebSocket disconnected');
+      if (workflowState !== 'completed' && workflowState !== 'failed') {
+        // Attempt reconnect with exponential backoff if not done
+        const delay = Math.min(1000 * Math.pow(2, reconnectAttempt.current), 30000);
+        reconnectAttempt.current += 1;
+        console.log(`Reconnecting in ${delay}ms (Attempt ${reconnectAttempt.current})`);
+        wsReconnectTimeout.current = setTimeout(() => {
+          if (id) connectWebSocket(id);
+        }, delay);
+      }
+    };
+    
+    ws.onerror = (err) => {
+      console.error('WebSocket error:', err);
+    };
+  };
+
+  const addTimelineEvent = (time, message, type) => {
+    setTimelineEvents(prev => [...prev, { time, message, type }]);
+  };
 
   const handleStartAnalysis = async (e) => {
     e.preventDefault();
     if (!queryText.trim()) return;
 
     setSubview('graph');
-    setProgress(0);
-    setActiveStep(0);
+    setWorkflowState('pending');
     setElapsedTime(0);
+    setNodeStates({});
+    setTimelineEvents([]);
+    setGraph({ nodes: [], edges: [] });
+    setActiveNodeId(null);
+
+    // Start timer
+    timerRef.current = setInterval(() => {
+      setElapsedTime(prev => +(prev + 0.1).toFixed(1));
+    }, 100);
 
     try {
-      // Call execute decision on backend
       const decRes = await api.executeDecision(workspace?.id || 'ws1-uuid-0001', queryText);
-      setDecisionId(decRes.id || decRes.decision_id);
+      const id = decRes.id || decRes.decision_id;
+      setDecisionId(id);
+      
+      if (decRes.graph) {
+        setGraph(decRes.graph);
+        // Initialize node states
+        const initialStates = {};
+        decRes.graph.nodes.forEach(n => {
+          initialStates[n.id] = { status: 'pending', produced: [], consumed: [], stream: '' };
+        });
+        setNodeStates(initialStates);
+      }
+      
+      connectWebSocket(id);
 
-      // Reset steps state to completed
-      setStepStates([
-        { id: 0, name: 'Retriever Agent', desc: 'Retrieves relevant knowledge from selected sources.', status: 'completed', time: 'Completed', count: 'Chunks retrieved', output: 'RETRIEVED_CHUNKS' },
-        { id: 1, name: 'Reasoning Agent', desc: 'Analyzes retrieved content and derives key insights.', status: 'completed', time: 'Completed', count: 'Analysis complete', output: 'REASONING_RESULT' },
-        { id: 2, name: 'Recommendation Agent', desc: 'Generates recommendation based on reasoning and business context.', status: 'completed', time: 'Completed', count: 'Recommendation ready', output: 'RECOMMENDATION' },
-        { id: 3, name: 'Rule Checker Agent', desc: 'Validates the recommendation against business rules and constraints.', status: 'completed', time: 'Completed', count: 'Rules verified', output: 'VALIDATION_RESULT' },
-        { id: 4, name: 'Explanation Agent', desc: 'Creates a natural language explanation of the final decision.', status: 'completed', time: 'Completed', count: 'Explanation finalized', output: 'EXPLANATION' }
-      ]);
-      
-      setProgress(100);
-      setActiveStep(5);
-      
-      // Store the result so Review can use it
       window.__lastDecisionResult = decRes;
     } catch (err) {
+      clearInterval(timerRef.current);
       toast.error(err.response?.data?.detail || 'Failed to execute decision.');
       setSubview('input');
     }
   };
 
-  // Removed simulated timers to rely on synchronous backend call
+  useEffect(() => {
+    if (workflowState === 'completed' || workflowState === 'failed') {
+      clearInterval(timerRef.current);
+    }
+  }, [workflowState]);
+
+  useEffect(() => {
+    return () => {
+      clearInterval(timerRef.current);
+      if (wsRef.current) {
+        wsRef.current.close();
+      }
+    };
+  }, []);
 
   const handleReviewClick = () => {
-    // call final complete callback
     onDecisionComplete(decisionId);
   };
 
-  useEffect(() => {
-    let interval = null;
-    if (subview === 'graph' && activeStep < 5) {
-      interval = setInterval(() => {
-        setElapsedTime(prev => +(prev + 0.1).toFixed(1));
-      }, 100);
-    }
-    return () => clearInterval(interval);
-  }, [subview, activeStep]);
+  const activeNodeData = activeNodeId ? graph.nodes.find(n => n.id === activeNodeId) : null;
+  const activeState = activeNodeId ? nodeStates[activeNodeId] : null;
 
-  const activeAgent = stepStates[Math.min(activeStep, 4)];
+  // Calculate overall progress based on completed nodes
+  const totalNodes = graph.nodes.length || 1;
+  const completedNodes = Object.values(nodeStates).filter(s => s.status === 'completed').length;
+  const progress = Math.round((completedNodes / totalNodes) * 100);
 
   return (
     <div className="full-page-scroll">
@@ -113,7 +257,6 @@ export default function Decisions({ workspace, initialQuery, onDecisionComplete 
                 </div>
               </div>
 
-              {/* Sources tags selection */}
               <div className="decisions-sources-label">Using knowledge from</div>
               <div className="decisions-sources-row">
                 {sources.map(src => (
@@ -143,41 +286,42 @@ export default function Decisions({ workspace, initialQuery, onDecisionComplete 
       ) : (
         /* Graph running view */
         <div>
-          {/* Header */}
           <div className="execution-header">
             <div className="execution-header-left">
               <h2>User Query</h2>
               <p className="query-text">"{queryText}"</p>
             </div>
             <div className="execution-header-right">
-              {activeStep < 5 ? (
+              {workflowState === 'running' || workflowState === 'pending' ? (
                 <div className="execution-status-pill running">
                   <Loader2 size={16} className="inspector-agent-avatar running" />
                   <span>In Progress</span>
                 </div>
-              ) : (
+              ) : workflowState === 'completed' ? (
                 <div className="execution-status-pill completed">
                   <Check size={16} />
                   <span>Completed</span>
+                </div>
+              ) : (
+                <div className="execution-status-pill error" style={{ color: 'var(--danger)', borderColor: 'rgba(239, 68, 68, 0.2)', backgroundColor: 'rgba(239, 68, 68, 0.1)' }}>
+                  <AlertTriangle size={16} />
+                  <span>Failed</span>
                 </div>
               )}
             </div>
           </div>
 
-          {/* Sub-tabs */}
           <div className="execution-tabs-row">
             <button className="execution-tab-btn">Overview</button>
             <button className="execution-tab-btn active">Plan Graph</button>
             <button className="execution-tab-btn">Artifacts</button>
             <button className="execution-tab-btn">Explanation</button>
-            <button className="execution-tab-btn" disabled={activeStep < 5} onClick={handleReviewClick}>
+            <button className="execution-tab-btn" disabled={workflowState !== 'completed'} onClick={handleReviewClick}>
               Review
             </button>
           </div>
 
-          {/* Main Grid */}
           <div className="execution-main-grid">
-            {/* Graph flow middle panel */}
             <div className="execution-graph-panel">
               <div className="graph-zoom-controls">
                 <button className="graph-zoom-btn">－</button>
@@ -186,29 +330,40 @@ export default function Decisions({ workspace, initialQuery, onDecisionComplete 
               </div>
 
               <div className="graph-nodes-flow">
-                {stepStates.map((step, index) => {
-                  const isCompleted = step.status === 'completed';
-                  const isRunning = step.status === 'running' || (index === activeStep && activeStep < 5);
+                {graph.nodes.map((node) => {
+                  const state = nodeStates[node.id] || {};
+                  const isCompleted = state.status === 'completed';
+                  const isRunning = state.status === 'running';
+                  const isFailed = state.status === 'failed';
                   
                   return (
-                    <div key={step.id} className="graph-node-card-wrapper">
-                      <div className={`graph-node-card ${isCompleted ? 'completed' : ''} ${isRunning ? 'running' : ''}`}>
+                    <div key={node.id} className="graph-node-card-wrapper" onClick={() => setActiveNodeId(node.id)} style={{ cursor: 'pointer' }}>
+                      <div className={`graph-node-card ${isCompleted ? 'completed' : ''} ${isRunning ? 'running' : ''} ${isFailed ? 'failed' : ''} ${activeNodeId === node.id ? 'active' : ''}`} style={isFailed ? { borderColor: 'var(--danger)' } : activeNodeId === node.id ? { borderColor: 'var(--primary)', boxShadow: '0 0 0 2px rgba(99, 102, 241, 0.2)' } : {}}>
                         <div className="graph-node-indicator">
-                          {isCompleted ? <Check size={14} strokeWidth={3} /> : (isRunning ? <Loader2 size={14} className="inspector-agent-avatar running" /> : <div />)}
+                          {isCompleted ? <Check size={14} strokeWidth={3} /> : (isRunning ? <Loader2 size={14} className="inspector-agent-avatar running" /> : isFailed ? <AlertTriangle size={14} color="var(--danger)" /> : <div />)}
                         </div>
                         
                         <div className="graph-node-text">
-                          <h4>{step.name}</h4>
-                          <p className="meta">{step.time} • {step.count}</p>
-                          <p className="desc">{step.desc}</p>
+                          <h4>{node.agent || node.id}</h4>
+                          <p className="meta">{state.status === 'pending' ? 'Pending' : (state.duration ? `${state.duration}ms` : 'Running')}</p>
+                          <p className="desc">{node.objective || node.description}</p>
                         </div>
                       </div>
 
                       <div className="graph-node-connector-arrow">
                         <div className="graph-node-connector-line"></div>
-                        <span className={`graph-node-output-pill ${isCompleted ? 'completed' : ''} ${isRunning ? 'running' : ''}`}>
-                          {step.output}
-                        </span>
+                        {node.produces?.length > 0 && (
+                          <div className="graph-node-outputs">
+                            {node.produces.map(art => {
+                              const isArtCreated = state.produced?.includes(art);
+                              return (
+                                <span key={art} className={`graph-node-output-pill ${isArtCreated ? 'completed' : ''} ${isRunning && !isArtCreated ? 'running' : ''}`}>
+                                  {art}
+                                </span>
+                              )
+                            })}
+                          </div>
+                        )}
                       </div>
                     </div>
                   );
@@ -216,82 +371,97 @@ export default function Decisions({ workspace, initialQuery, onDecisionComplete 
               </div>
             </div>
 
-            {/* Right details inspector */}
             <div className="execution-inspector-panel">
-              <div>
-                <div className="inspector-agent-header">
-                  <div className={`inspector-agent-avatar ${activeStep < 5 ? 'running' : ''}`}>
-                    {activeStep < 5 ? <Loader2 size={22} /> : <Check size={22} />}
+              {activeNodeData ? (
+                <div>
+                  <div className="inspector-agent-header">
+                    <div className={`inspector-agent-avatar ${activeState?.status === 'running' ? 'running' : ''}`} style={activeState?.status === 'failed' ? { backgroundColor: 'var(--danger-dim)', color: 'var(--danger)' } : {}}>
+                      {activeState?.status === 'running' ? <Loader2 size={22} /> : activeState?.status === 'completed' ? <Check size={22} /> : activeState?.status === 'failed' ? <AlertTriangle size={22} /> : <div />}
+                    </div>
+                    <div className="inspector-agent-title">
+                      <h3>{activeNodeData.agent || activeNodeData.id}</h3>
+                      <span className="status">{activeState?.status || 'pending'}</span>
+                    </div>
                   </div>
-                  <div className="inspector-agent-title">
-                    <h3>{activeStep < 5 ? activeAgent?.name : 'Decision Process Finished'}</h3>
-                    <span className="status">{activeStep < 5 ? 'Running' : 'Ready'}</span>
+
+                  <table className="inspector-details-table">
+                    <tbody>
+                      <tr>
+                        <td className="label">Execution Time</td>
+                        <td className="value">{activeState?.duration ? `${activeState.duration}ms` : (activeState?.status === 'running' ? '...' : '-')}</td>
+                      </tr>
+                      <tr>
+                        <td className="label">Status</td>
+                        <td className="value" style={{ color: activeState?.status === 'running' ? 'var(--primary)' : activeState?.status === 'completed' ? 'var(--success)' : activeState?.status === 'failed' ? 'var(--danger)' : activeState?.status === 'skipped' ? 'var(--text-secondary)' : 'var(--text-secondary)' }}>
+                          {activeState?.status?.toUpperCase() || 'PENDING'}
+                        </td>
+                      </tr>
+                      {activeState?.metrics?.retrieved_chunk_count !== undefined && (
+                      <tr>
+                        <td className="label">Chunks Retrieved</td>
+                        <td className="value">{activeState.metrics.retrieved_chunk_count}</td>
+                      </tr>
+                      )}
+                      {activeState?.metrics?.confidence_score !== undefined && (
+                      <tr>
+                        <td className="label">Confidence Score</td>
+                        <td className="value">{activeState.metrics.confidence_score}</td>
+                      </tr>
+                      )}
+                    </tbody>
+                  </table>
+
+                  <div className="inspector-description-box">
+                    <h4>Description</h4>
+                    <p>{activeNodeData.description}</p>
                   </div>
-                </div>
 
-                <table className="inspector-details-table">
-                  <tbody>
-                    <tr>
-                      <td className="label">Execution Time</td>
-                      <td className="value">{elapsedTime}s</td>
-                    </tr>
-                    <tr>
-                      <td className="label">Status</td>
-                      <td className="value" style={{ color: activeStep < 5 ? 'var(--primary)' : 'var(--success)' }}>
-                        {activeStep < 5 ? 'In Progress' : 'Completed'}
-                      </td>
-                    </tr>
-                    <tr>
-                      <td className="label">Produced Outputs</td>
-                      <td className="value">
-                        <span className="graph-node-output-pill completed">
-                          {activeStep < 5 ? activeAgent?.output : 'FINAL_REPORT'}
-                        </span>
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
-
-                <div className="inspector-description-box">
-                  <h4>Description</h4>
-                  <p>{activeStep < 5 ? activeAgent?.desc : 'All workflow execution plan nodes successfully resolved. Click Review to evaluate final recommendations and business rules.'}</p>
-                </div>
-
-                <div className="inspector-description-box">
-                  <h4>Input Artifacts</h4>
-                  <div className="inspector-artifacts-list">
-                    {activeStep === 0 && <span className="inspector-artifact-tag">USER_GOAL</span>}
-                    {activeStep === 1 && <span className="inspector-artifact-tag">RETRIEVED_CHUNKS</span>}
-                    {activeStep === 2 && (
-                      <>
-                        <span className="inspector-artifact-tag">RETRIEVED_CHUNKS</span>
-                        <span className="inspector-artifact-tag">REASONING_RESULT</span>
-                      </>
-                    )}
-                    {activeStep === 3 && <span className="inspector-artifact-tag">RECOMMENDATION</span>}
-                    {activeStep === 4 && (
-                      <>
-                        <span className="inspector-artifact-tag">RECOMMENDATION</span>
-                        <span className="inspector-artifact-tag">VALIDATION_RESULT</span>
-                      </>
-                    )}
-                    {activeStep >= 5 && <span className="inspector-artifact-tag">EXPLANATION</span>}
+                  <div className="inspector-description-box">
+                    <h4>Artifacts</h4>
+                    <div className="inspector-artifacts-list">
+                      {activeNodeData.consumes?.map(art => (
+                         <span key={art} className="inspector-artifact-tag" style={{ borderLeft: '2px solid var(--primary)' }}>↓ {art}</span>
+                      ))}
+                      {activeNodeData.produces?.map(art => (
+                         <span key={art} className="inspector-artifact-tag" style={{ borderLeft: '2px solid var(--success)' }}>↑ {art}</span>
+                      ))}
+                    </div>
                   </div>
+                  
+                  {activeState?.stream && (
+                    <div className="inspector-description-box">
+                      <h4>Streaming Output</h4>
+                      <p style={{ fontFamily: 'monospace', whiteSpace: 'pre-wrap', backgroundColor: 'var(--surface-sunken)', padding: '8px', borderRadius: '4px' }}>
+                        {activeState.stream}
+                      </p>
+                    </div>
+                  )}
+                  
+                  {activeState?.error && (
+                    <div className="inspector-description-box" style={{ borderColor: 'rgba(239, 68, 68, 0.2)' }}>
+                      <h4 style={{ color: 'var(--danger)' }}>Error</h4>
+                      <p style={{ color: 'var(--danger)' }}>{activeState.error}</p>
+                    </div>
+                  )}
                 </div>
-              </div>
+              ) : (
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--text-secondary)' }}>
+                  Select a node to inspect its execution details.
+                </div>
+              )}
 
               <div>
                 <div className="inspector-progress-section">
                   <div className="inspector-progress-label">
-                    <span>Progress</span>
-                    <span>{progress}%</span>
+                    <span>Overall Execution</span>
+                    <span>{elapsedTime}s</span>
                   </div>
                   <div className="inspector-progress-bar">
                     <div className="inspector-progress-fill" style={{ width: `${progress}%` }}></div>
                   </div>
                 </div>
 
-                {activeStep >= 5 && (
+                {workflowState === 'completed' && (
                   <button className="btn btn-primary" style={{ width: '100%', marginTop: '20px', padding: '12px' }} onClick={handleReviewClick}>
                     Review Recommendation
                   </button>
@@ -300,17 +470,15 @@ export default function Decisions({ workspace, initialQuery, onDecisionComplete 
             </div>
           </div>
 
-          {/* Bottom Execution Timeline */}
           <div className="execution-timeline-card">
             <h3>Execution Timeline</h3>
-            <div className="timeline-track">
-              {stepStates.map((step, index) => (
-                <div key={step.id} className={`timeline-step ${step.status === 'completed' ? 'completed' : ''} ${step.status === 'running' ? 'running' : ''}`}>
-                  <div className="timeline-step-dot">
-                    {step.status === 'completed' ? <Check size={12} strokeWidth={3} /> : index + 1}
-                  </div>
-                  <h4>{step.name.split(' ')[0]}</h4>
-                  <p>{step.time}</p>
+            <div className="timeline-track" style={{ display: 'flex', flexDirection: 'column', gap: '8px', padding: '16px 0' }}>
+              {timelineEvents.map((evt, idx) => (
+                <div key={idx} style={{ display: 'flex', gap: '12px', fontSize: '13px' }}>
+                  <span style={{ color: 'var(--text-tertiary)', minWidth: '70px' }}>{evt.time}</span>
+                  <span style={{ color: evt.type === 'success' ? 'var(--success)' : evt.type === 'error' ? 'var(--danger)' : 'var(--text-primary)' }}>
+                    {evt.message}
+                  </span>
                 </div>
               ))}
             </div>

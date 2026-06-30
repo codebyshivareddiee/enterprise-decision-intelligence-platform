@@ -78,7 +78,7 @@ def build_default_registry(knowledge_manager=None, ai_manager=None) -> AgentRegi
     
     registry.register(
         agent_type=AgentType.RETRIEVER,
-        node_implementation=RetrieverAgent(knowledge_manager=knowledge_manager).execute,
+        node_implementation=RetrieverAgent(knowledge_manager=knowledge_manager, ai_manager=ai_manager).execute,
         consumes=[WorkflowArtifact.USER_REQUEST],
         produces=[WorkflowArtifact.RETRIEVED_CHUNKS],
         description="Retrieves knowledge chunks"

@@ -65,6 +65,7 @@ class WorkflowExecuteResponse(BaseModel):
 
     decision_id: UUID
     execution_plan: dict[str, Any] | None
+    graph: dict[str, Any] | None = None
     execution_status: str
     requires_human_review: bool
     recommendation: dict[str, Any] | None

@@ -12,6 +12,41 @@ from app.agents.models.recommendation import RecommendationResult
 from app.agents.models.retriever import RetrieverResult
 from app.agents.models.validation import ValidationResult
 
+def merge_retriever_results(a: Any, b: Any) -> Any:
+    if not a: return b
+    if not b: return a
+    
+    if isinstance(a, dict):
+        a = RetrieverResult(**a)
+    if isinstance(b, dict):
+        b = RetrieverResult(**b)
+        
+    seen = {c.text for c in a.chunks}
+    merged_chunks = a.chunks.copy()
+    for c in b.chunks:
+        if c.text not in seen:
+            merged_chunks.append(c)
+            seen.add(c.text)
+    return RetrieverResult(
+        chunks=merged_chunks,
+        query_used=a.query_used if a.query_used == b.query_used else f"{a.query_used} | {b.query_used}"
+    )
+
+def merge_reasoning_results(a: Any, b: Any) -> Any:
+    if not a: return b
+    if not b: return a
+    
+    if isinstance(a, dict):
+        a = ReasoningResult(**a)
+    if isinstance(b, dict):
+        b = ReasoningResult(**b)
+        
+    return ReasoningResult(
+        entity_evaluations=a.entity_evaluations + b.entity_evaluations,
+        missing_information=list(set(a.missing_information + b.missing_information)),
+        identified_risks=list(set(a.identified_risks + b.identified_risks)),
+        identified_opportunities=list(set(a.identified_opportunities + b.identified_opportunities)),
+    )
 
 class WorkflowState(BaseModel):
     """Strongly typed state for the LangGraph workflow.
@@ -51,10 +86,10 @@ class WorkflowState(BaseModel):
     user_request: Any | None = Field(
         default=None, description="The user's original request"
     )
-    retrieved_chunks: RetrieverResult | None = Field(
+    retrieved_chunks: Annotated[RetrieverResult | None, merge_retriever_results] = Field(
         default=None, description="Knowledge chunks retrieved by the Retriever"
     )
-    reasoning_result: ReasoningResult | None = Field(
+    reasoning_result: Annotated[ReasoningResult | None, merge_reasoning_results] = Field(
         default=None, description="Result of applying business rules and AI reasoning"
     )
     recommendation: RecommendationResult | None = Field(

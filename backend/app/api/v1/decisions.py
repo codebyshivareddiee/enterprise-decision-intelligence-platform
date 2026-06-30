@@ -5,7 +5,7 @@ import logging
 from uuid import UUID
 from typing import Any
 
-from fastapi import APIRouter, Depends, Request, BackgroundTasks
+from fastapi import APIRouter, Depends, Request, BackgroundTasks, WebSocket, WebSocketDisconnect
 from langgraph.checkpoint.memory import MemorySaver
 
 from app.agents.planner.planner import Planner
@@ -17,6 +17,8 @@ from app.api.dependencies import (
     get_audit_repository,
     get_recommendation_repository,
     get_knowledge_manager,
+    get_knowledge_asset_repository,
+    get_business_rule_repository
 )
 from app.api.v1.models.requests import (
     DecisionOutcomeRequest,
@@ -38,6 +40,8 @@ from app.persistence.mongodb.repositories.workspace_repository import (
     WorkspaceRepository,
 )
 from app.persistence.mongodb.repositories.recommendation_repository import RecommendationRepository
+from app.persistence.mongodb.repositories.knowledge_asset_repository import KnowledgeAssetRepository
+from app.persistence.mongodb.repositories.business_rule_repository import BusinessRuleRepository
 from app.knowledge.manager import KnowledgeManager
 from app.workflow.context import ExecutionContext, RuntimeConfig
 from app.workflow.models import WorkflowState
@@ -50,6 +54,11 @@ router = APIRouter(
     prefix="/decisions",
     tags=["Decisions"],
     dependencies=[Depends(require_authenticated_user())],
+)
+
+ws_router = APIRouter(
+    prefix="/decisions/ws",
+    tags=["Decisions WebSocket"]
 )
 
 # Global memory checkpointer
@@ -83,7 +92,7 @@ async def run_workflow_background(
                 entities_list.append(
                     EntityEvaluation(
                         asset_id=entity_uuid,
-                        asset_name="AcmeSoft",
+                        asset_name=getattr(rec_result.recommendation, "entity_name", "Primary Candidate"),
                         ai_score=rec_result.recommendation.final_score,
                         final_rank=rec_result.recommendation.rank,
                         reasoning_notes=", ".join(rec_result.recommendation.contributing_factors),
@@ -100,7 +109,7 @@ async def run_workflow_background(
                     entities_list.append(
                         EntityEvaluation(
                             asset_id=alt_uuid,
-                            asset_name="Alternative Candidate",
+                            asset_name=getattr(alt, "entity_name", "Alternative Candidate"),
                             ai_score=alt.final_score,
                             final_rank=alt.rank,
                             reasoning_notes=", ".join(alt.contributing_factors),
@@ -109,7 +118,14 @@ async def run_workflow_background(
                     )
 
             rec.entities = entities_list
-            rec.explanation = getattr(final_state.explanation, "explanation", "Completed recommendation validation.") if final_state.explanation else "Verified recommendation parameters."
+            if final_state.explanation:
+                rec.explanation = getattr(final_state.explanation, "summary", "Completed recommendation validation.")
+                rec.evidence = getattr(final_state.explanation, "evidence_references", [])
+                rec.rules = getattr(final_state.explanation, "applied_rules", [])
+            else:
+                rec.explanation = "Verified recommendation parameters."
+                rec.evidence = []
+                rec.rules = []
             
             if final_state.is_interrupted:
                 rec.status = RecommendationStatus.PENDING # Human verification required
@@ -139,6 +155,8 @@ async def execute_decision(
     planner: Planner = Depends(get_planner),
     workspace_repo: WorkspaceRepository = Depends(get_workspace_repository),
     recommendation_repo: RecommendationRepository = Depends(get_recommendation_repository),
+    knowledge_asset_repo: KnowledgeAssetRepository = Depends(get_knowledge_asset_repository),
+    business_rule_repo: BusinessRuleRepository = Depends(get_business_rule_repository),
     knowledge_manager: KnowledgeManager = Depends(get_knowledge_manager),
     audit_repo = Depends(get_audit_repository),
 ) -> StandardResponse[WorkflowExecuteResponse]:
@@ -152,13 +170,29 @@ async def execute_decision(
     # In a real app we'd fetch actual schemas, rules, etc.
     # For now, construct the rich decision context.
     workspace_decision_context = workspace.model_dump(mode="json") if hasattr(workspace, "model_dump") else workspace.dict()
-    # Assume mock logic or actual repositories would fetch these
-    workspace_decision_context["business_rules"] = []
+    workspace_rules = await business_rule_repo.list(
+        organization_id=workspace.organization_id, 
+        workspace_id=workspace.id
+    )
+    workspace_decision_context["business_rules"] = [
+        rule.model_dump(mode="json") if hasattr(rule, "model_dump") else rule.dict() 
+        for rule in workspace_rules
+    ]
+    
     workspace_decision_context["preference_profile"] = {}
     workspace_decision_context["knowledge_schemas"] = []
     
     # Retrieve real selected knowledge assets as strings for state
     selected_asset_ids = [str(aid) for aid in workspace.selected_knowledge_asset_ids] if workspace.selected_knowledge_asset_ids else []
+    
+    # Fetch actual asset names to provide better context to the Planner and Retriever
+    asset_names = []
+    if workspace.selected_knowledge_asset_ids:
+        for aid in workspace.selected_knowledge_asset_ids:
+            asset = await knowledge_asset_repo.get_by_id(aid)
+            if asset and asset.name:
+                asset_names.append(asset.name)
+    workspace_decision_context["knowledge_asset_names"] = asset_names
 
     import time
 
@@ -230,110 +264,47 @@ async def execute_decision(
 
     runtime = WorkflowRuntime(context)
 
-    # Execute workflow
-    final_state = await runtime.start(
-        initial_state=initial_state, thread_id=str(decision_id)
-    )
-
-    # Extract outputs safely mapped to DTOs
-    recommendation_dict = None
-    if final_state.recommendation and hasattr(final_state.recommendation, "recommendation"):
-        rec = final_state.recommendation.recommendation
-        
-        entity_name = rec.entity_id
-        if final_state.retrieved_chunks and final_state.retrieved_chunks.chunks:
-            for chunk in final_state.retrieved_chunks.chunks:
-                if chunk.asset_id == rec.entity_id or str(chunk.metadata.get("id")) == rec.entity_id:
-                    entity_name = chunk.metadata.get("asset_name", chunk.metadata.get("name", rec.entity_id))
-                    break
-
-        recommendation_dict = {
-            "entity_id": rec.entity_id,
-            "entity_name": entity_name,
-            "final_score": rec.final_score,
-            "rank": rec.rank,
-            "contributing_factors": rec.contributing_factors,
-        }
+    # Build graph dict for frontend immediately
+    nodes = []
+    edges = []
     
-    explanation_text = None
-    if final_state.explanation and hasattr(final_state.explanation, "summary"):
-        explanation_text = final_state.explanation.summary
-        
-    evidence_items = []
-    if final_state.retrieved_chunks and hasattr(final_state.retrieved_chunks, "chunks"):
-        for chunk in final_state.retrieved_chunks.chunks:
-            evidence_items.append(
-                EvidenceItem(
-                    asset_id=str(chunk.asset_id),
-                    asset_name=chunk.metadata.get("asset_name", "Unknown Asset") if chunk.metadata else "Unknown Asset",
-                    chunk_id=chunk.metadata.get("chunk_id", None) if chunk.metadata else None,
-                    chunk_preview=chunk.text[:200] + "..." if len(chunk.text) > 200 else chunk.text,
-                    relevance_score=chunk.score,
-                    metadata=chunk.metadata,
-                )
-            )
+    for step in plan.execution_steps:
+        nodes.append({
+            "id": step.step_id,
+            "type": "agent",
+            "data": {
+                "label": step.step_id.replace("_", " ").title(),
+                "agent_name": step.agent_name.value if hasattr(step.agent_name, "value") else str(step.agent_name)
+            }
+        })
+        for dep in step.depends_on:
+            edges.append({
+                "id": f"{dep}-{step.step_id}",
+                "source": dep,
+                "target": step.step_id
+            })
+            
+    graph_dict = {"nodes": nodes, "edges": edges}
 
-    # Update recommendation object with final state results
-    from app.models.recommendation import EntityEvaluation
-    entities_list = []
-    if final_state.recommendation:
-        rec_result = final_state.recommendation
-        try:
-            entity_uuid = UUID(rec_result.recommendation.entity_id)
-        except ValueError:
-            entity_uuid = uuid.uuid4()
-
-        primary_score = rec_result.recommendation.final_score
-        if primary_score is not None and primary_score > 1.0:
-            primary_score = primary_score / 100.0
-
-        entities_list.append(
-            EntityEvaluation(
-                asset_id=entity_uuid,
-                asset_name=entity_name if 'entity_name' in locals() else rec_result.recommendation.entity_id,
-                ai_score=primary_score,
-                final_rank=rec_result.recommendation.rank,
-                reasoning_notes=", ".join(rec_result.recommendation.contributing_factors),
-                excluded=False
-            )
-        )
-        for alt in rec_result.alternatives:
-            try:
-                alt_uuid = UUID(alt.entity_id)
-            except ValueError:
-                alt_uuid = uuid.uuid4()
-
-            alt_score = alt.final_score
-            if alt_score is not None and alt_score > 1.0:
-                alt_score = alt_score / 100.0
-
-            entities_list.append(
-                EntityEvaluation(
-                    asset_id=alt_uuid,
-                    asset_name="Alternative Candidate",
-                    ai_score=alt_score,
-                    final_rank=alt.rank,
-                    reasoning_notes=", ".join(alt.contributing_factors),
-                    excluded=False
-                )
-            )
-
-    rec_obj.entities = entities_list
-    rec_obj.explanation = explanation_text or "Verified recommendation parameters."
-    rec_obj.status = RecommendationStatus.PENDING if final_state.is_interrupted else RecommendationStatus.COMPLETED
-    await recommendation_repo.update(rec_obj)
+    # Execute workflow in background
+    background_tasks.add_task(
+        run_workflow_background,
+        runtime=runtime,
+        initial_state=initial_state,
+        decision_id=decision_id,
+        recommendation_repo=recommendation_repo
+    )
 
     exec_resp = WorkflowExecuteResponse(
         decision_id=decision_id,
-        execution_plan=plan.model_dump(),
-        execution_status=(
-            "COMPLETED" if not final_state.is_interrupted else "INTERRUPTED"
-        ),
-        requires_human_review=final_state.is_interrupted,
-        recommendation=recommendation_dict,
-        explanation=explanation_text,
+        execution_plan=plan.model_dump() if hasattr(plan, "model_dump") else plan.dict(),
+        graph=graph_dict,
+        execution_status="PENDING",
+        requires_human_review=plan.requires_human_review,
+        recommendation=None,
+        explanation=None,
         execution_trace=[],
-        supporting_evidence=evidence_items,
+        supporting_evidence=[],
     )
 
     await audit_repo.log_event(
@@ -536,10 +507,17 @@ async def list_decisions(
             "confidence": conf,
             "date": r.created_at.strftime("%Y-%m-%d") if r.created_at else "Recently",
             "decided_by_name": "AI Orchestrator",
-            "recommended_option": "AcmeSoft" if not r.entities else r.entities[0].asset_name,
+            "recommended_option": "Insufficient Data / No Decision" if not r.entities else r.entities[0].asset_name,
             "explanation": r.explanation or "Running decision intelligence evaluation...",
-            "evidence": ["Vendor_Profile.pdf", "Security_Policy.pdf", "Business_Rules.pdf"],
-            "rules": [{"name": "Budget Constraint"}, {"name": "ISO 27001 Compliance"}],
+            "evidence": r.evidence if hasattr(r, "evidence") else [],
+            "rules": [{"name": rule} for rule in r.rules] if hasattr(r, "rules") else [],
+            "alternatives": [
+                {
+                    "entity_name": e.asset_name,
+                    "score": int(e.ai_score * 100) if e.ai_score else 0,
+                    "reasoning": e.reasoning_notes
+                } for e in r.entities[1:]
+            ] if r.entities and len(r.entities) > 1 else [],
             "feedback": feedback_str
         })
     return StandardResponse(
@@ -571,13 +549,20 @@ async def get_decision(
         "code": f"DEC-{str(r.id)[:8].upper()}",
         "goal": r.goal,
         "status": r.status.value.lower(),
-        "confidence": 94,
+        "confidence": int(r.entities[0].ai_score * 100) if r.entities and r.entities[0].ai_score else 94,
         "date": r.created_at.strftime("%Y-%m-%d") if r.created_at else "Recently",
         "decided_by_name": "AI Orchestrator",
-        "recommended_option": "AcmeSoft" if not r.entities else r.entities[0].asset_name,
+        "recommended_option": "Insufficient Data / No Decision" if not r.entities else r.entities[0].asset_name,
         "explanation": r.explanation or "Running decision intelligence evaluation...",
-        "evidence": ["Vendor_Profile.pdf", "Security_Policy.pdf", "Business_Rules.pdf"],
-        "rules": [{"name": "Budget Constraint"}, {"name": "ISO 27001 Compliance"}]
+        "evidence": r.evidence if hasattr(r, "evidence") else [],
+        "rules": [{"name": rule} for rule in r.rules] if hasattr(r, "rules") else [],
+        "alternatives": [
+            {
+                "entity_name": e.asset_name,
+                "score": int(e.ai_score * 100) if e.ai_score else 0,
+                "reasoning": e.reasoning_notes
+            } for e in r.entities[1:]
+        ] if r.entities and len(r.entities) > 1 else []
     }
     return StandardResponse(
         success=True,
@@ -585,3 +570,23 @@ async def get_decision(
         message="Recommendation retrieved successfully.",
         request_id=getattr(req.state, "request_id", ""),
     )
+
+
+@ws_router.websocket("/workflows/{workflow_id}")
+async def workflow_websocket(websocket: WebSocket, workflow_id: str):
+    """WebSocket endpoint to stream workflow execution events."""
+    await websocket.accept()
+    from app.workflow.events import event_bus
+    
+    queue = await event_bus.subscribe(workflow_id)
+    try:
+        while True:
+            # Wait for events from the queue
+            msg = await queue.get()
+            await websocket.send_text(msg)
+    except WebSocketDisconnect:
+        pass
+    except Exception as e:
+        logger.error(f"WebSocket error for workflow {workflow_id}: {e}")
+    finally:
+        event_bus.unsubscribe(workflow_id, queue)

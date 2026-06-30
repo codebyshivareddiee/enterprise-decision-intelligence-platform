@@ -49,7 +49,7 @@ export default function UploadWizard({ workspace, user, onClose, onSuccess }) {
   const [editedMetadata, setEditedMetadata] = useState('');
 
   // Processing state
-  const [processingStage, setProcessingStage] = useState(0); 
+  const [processingStage, setProcessingStage] = useState(0);
   const [uploadResult, setUploadResult] = useState(null);
 
   const handleFileChange = (e) => {
@@ -66,16 +66,16 @@ export default function UploadWizard({ workspace, user, onClose, onSuccess }) {
     try {
       const orgId = user.organization_ids?.[0];
       const result = await api.analyzeKnowledge(workspace?.id || null, orgId, description, uploadFile, selectedSchemaId || null);
-      
+
       setAnalysisResult(result);
-      
+
       // Initialize editable state
       setEditedSchemaId(result.schema_selected || '');
       setEditedChunkStrategy(result.chunking_strategy || '');
       setEditedChunkProfile(result.chunk_profile || '');
       setEditedLifecycle(result.suggested_lifecycle?.join(', ') || '');
       setEditedMetadata(result.suggested_metadata?.join(', ') || '');
-      
+
       setStep('review');
     } catch (error) {
       console.error(error);
@@ -87,7 +87,7 @@ export default function UploadWizard({ workspace, user, onClose, onSuccess }) {
   const handleStartProcessing = async () => {
     setStep('processing');
     setProcessingStage(0);
-    
+
     // Simulate processing stages visually (fake timing for UI feedback, real API call in background)
     // 0: Uploading, 1: Processing, 2: Chunking, 3: Embedding, 4: Indexing
     const stages = setInterval(() => {
@@ -102,15 +102,15 @@ export default function UploadWizard({ workspace, user, onClose, onSuccess }) {
       const orgId = user.organization_ids?.[0];
       // Send the overrides to the backend
       const result = await api.uploadKnowledge(
-        workspace?.id || null, 
-        orgId, 
-        description, 
-        uploadFile, 
-        editedChunkStrategy, 
-        editedChunkProfile, 
+        workspace?.id || null,
+        orgId,
+        description,
+        uploadFile,
+        editedChunkStrategy,
+        editedChunkProfile,
         editedSchemaId
       );
-      
+
       clearInterval(stages);
       setProcessingStage(4);
       setUploadResult(result);
@@ -163,7 +163,7 @@ export default function UploadWizard({ workspace, user, onClose, onSuccess }) {
         </div>
 
         <div className="modal-body" style={{ padding: '32px' }}>
-          
+
           {step === 'input' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
               <div className="wizard-step-card">
@@ -213,10 +213,10 @@ export default function UploadWizard({ workspace, user, onClose, onSuccess }) {
               <div className="wizard-step-card">
                 <div className="wizard-step-header">
                   <div className="wizard-step-number">3</div>
-                  <h3>Choose Knowledge Type (Static for Hackathon)</h3>
+                  <h3>Choose Knowledge Type</h3>
                 </div>
-                <select 
-                  className="wizard-textarea" 
+                <select
+                  className="wizard-textarea"
                   style={{ height: 'auto', padding: '10px' }}
                   value={selectedSchemaId}
                   onChange={e => setSelectedSchemaId(e.target.value)}
@@ -263,8 +263,8 @@ export default function UploadWizard({ workspace, user, onClose, onSuccess }) {
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
                   <div>
                     <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, marginBottom: '6px', color: 'var(--text-muted)' }}>Suggested Knowledge Type</label>
-                    <select 
-                      className="wizard-textarea" 
+                    <select
+                      className="wizard-textarea"
                       style={{ height: 'auto', padding: '8px' }}
                       value={editedSchemaId}
                       onChange={e => setEditedSchemaId(e.target.value)}
@@ -280,8 +280,8 @@ export default function UploadWizard({ workspace, user, onClose, onSuccess }) {
                   </div>
                   <div>
                     <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, marginBottom: '6px', color: 'var(--text-muted)' }}>Suggested Chunk Strategy</label>
-                    <select 
-                      className="wizard-textarea" 
+                    <select
+                      className="wizard-textarea"
                       style={{ height: 'auto', padding: '8px' }}
                       value={editedChunkStrategy}
                       onChange={e => setEditedChunkStrategy(e.target.value)}
@@ -295,8 +295,8 @@ export default function UploadWizard({ workspace, user, onClose, onSuccess }) {
 
                 <div style={{ marginTop: '16px' }}>
                   <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, marginBottom: '6px', color: 'var(--text-muted)' }}>Suggested Chunk Profile</label>
-                  <select 
-                    className="wizard-textarea" 
+                  <select
+                    className="wizard-textarea"
                     style={{ height: 'auto', padding: '8px' }}
                     value={editedChunkProfile}
                     onChange={e => setEditedChunkProfile(e.target.value)}
@@ -348,26 +348,26 @@ export default function UploadWizard({ workspace, user, onClose, onSuccess }) {
           {step === 'processing' && (
             <div style={{ textAlign: 'center', padding: '40px 20px' }}>
               <h3 style={{ marginBottom: '32px' }}>Ingesting Document</h3>
-              
+
               <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', maxWidth: '300px', margin: '0 auto', textAlign: 'left' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                  {processingStage > 0 ? <CheckCircle2 size={20} color="#22c55e" /> : (processingStage === 0 ? <Loader2 size={20} className="spinner" color="var(--primary)" /> : <div style={{width: 20}} />)}
+                  {processingStage > 0 ? <CheckCircle2 size={20} color="#22c55e" /> : (processingStage === 0 ? <Loader2 size={20} className="spinner" color="var(--primary)" /> : <div style={{ width: 20 }} />)}
                   <span style={{ color: processingStage >= 0 ? 'var(--text-primary)' : 'var(--text-muted)' }}>1. Uploading</span>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                  {processingStage > 1 ? <CheckCircle2 size={20} color="#22c55e" /> : (processingStage === 1 ? <Loader2 size={20} className="spinner" color="var(--primary)" /> : <div style={{width: 20}} />)}
+                  {processingStage > 1 ? <CheckCircle2 size={20} color="#22c55e" /> : (processingStage === 1 ? <Loader2 size={20} className="spinner" color="var(--primary)" /> : <div style={{ width: 20 }} />)}
                   <span style={{ color: processingStage >= 1 ? 'var(--text-primary)' : 'var(--text-muted)' }}>2. Processing</span>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                  {processingStage > 2 ? <CheckCircle2 size={20} color="#22c55e" /> : (processingStage === 2 ? <Loader2 size={20} className="spinner" color="var(--primary)" /> : <div style={{width: 20}} />)}
+                  {processingStage > 2 ? <CheckCircle2 size={20} color="#22c55e" /> : (processingStage === 2 ? <Loader2 size={20} className="spinner" color="var(--primary)" /> : <div style={{ width: 20 }} />)}
                   <span style={{ color: processingStage >= 2 ? 'var(--text-primary)' : 'var(--text-muted)' }}>3. Chunking & Generation</span>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                  {processingStage > 3 ? <CheckCircle2 size={20} color="#22c55e" /> : (processingStage === 3 ? <Loader2 size={20} className="spinner" color="var(--primary)" /> : <div style={{width: 20}} />)}
+                  {processingStage > 3 ? <CheckCircle2 size={20} color="#22c55e" /> : (processingStage === 3 ? <Loader2 size={20} className="spinner" color="var(--primary)" /> : <div style={{ width: 20 }} />)}
                   <span style={{ color: processingStage >= 3 ? 'var(--text-primary)' : 'var(--text-muted)' }}>4. Embedding Generation</span>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                  {processingStage > 4 ? <CheckCircle2 size={20} color="#22c55e" /> : (processingStage === 4 ? <Loader2 size={20} className="spinner" color="var(--primary)" /> : <div style={{width: 20}} />)}
+                  {processingStage > 4 ? <CheckCircle2 size={20} color="#22c55e" /> : (processingStage === 4 ? <Loader2 size={20} className="spinner" color="var(--primary)" /> : <div style={{ width: 20 }} />)}
                   <span style={{ color: processingStage >= 4 ? 'var(--text-primary)' : 'var(--text-muted)' }}>5. Indexing in Qdrant</span>
                 </div>
               </div>
@@ -381,7 +381,7 @@ export default function UploadWizard({ workspace, user, onClose, onSuccess }) {
               </div>
               <h3 style={{ marginBottom: '8px' }}>Upload Completed</h3>
               <p style={{ color: 'var(--text-muted)', marginBottom: '32px' }}>Your document has been added to the Organization Knowledge Library.</p>
-              
+
               <div className="wizard-step-card" style={{ textAlign: 'left', marginBottom: '32px' }}>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', fontSize: '13px' }}>
                   <div>

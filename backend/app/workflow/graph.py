@@ -21,6 +21,9 @@ class WorkflowGraphBuilder:
 
     def build(self) -> Any:
         """Compile the execution plan into a StateGraph."""
+        if not self.context.plan:
+            raise ValueError("Execution plan is missing from context.")
+
         builder = StateGraph(WorkflowState)
 
         # Add the coordinator node
@@ -30,6 +33,8 @@ class WorkflowGraphBuilder:
         # Add nodes for each execution step
         for step in self.context.plan.execution_steps:
             node_def = self.context.registry.get(step.agent_name)
+            if not node_def:
+                raise ValueError(f"Agent '{step.agent_name}' not found in registry.")
 
             # Wrap the registered node to handle validation and state updates
             # Default arguments capture the variables from the loop closure
@@ -42,16 +47,32 @@ class WorkflowGraphBuilder:
                 async def node_wrapper(state: WorkflowState) -> dict[str, Any]:
                     import inspect
                     import time
+                    from app.workflow.events import event_bus
 
                     start_time = time.time()
+                    workflow_id = state.get("decision_id", "unknown") if isinstance(state, dict) else getattr(state, "decision_id", "unknown")
+                    
+                    if isinstance(state, dict):
+                        state["current_step_id"] = step_to_wrap.step_id
+                    else:
+                        state.current_step_id = step_to_wrap.step_id
+                        
                     logger.info(f"[{step_to_wrap.step_id}] Started execution...")
+                    
+                    await event_bus.publish(workflow_id, "agent_started", {
+                        "step_id": step_to_wrap.step_id,
+                        "agent_name": step_to_wrap.agent_name,
+                        "status": "running",
+                        "progress": 0
+                    })
 
                     consumed_names = [a.value for a in consumes]
                     if consumed_names:
                         # Serialize inputs safely using pydantic if possible
                         input_data = {}
                         for a in consumes:
-                            val = getattr(state, a.value.lower(), None)
+                            field_key = a.value.lower()
+                            val = state.get(field_key) if isinstance(state, dict) else getattr(state, field_key, None)
                             if val and hasattr(val, "model_dump"):
                                 input_data[a.value.lower()] = val.model_dump()
                             else:
@@ -61,13 +82,20 @@ class WorkflowGraphBuilder:
                             f"[{step_to_wrap.step_id}] Consuming artifacts: {consumed_names}",
                             inputs=input_data
                         )
+                        for name in consumed_names:
+                            await event_bus.publish(workflow_id, "artifact_consumed", {
+                                "step_id": step_to_wrap.step_id,
+                                "agent_name": step_to_wrap.agent_name,
+                                "artifact_name": name
+                            })
 
                     updates: dict[str, Any] = {}
 
                     # Validate consumes
                     for artifact in consumes:
                         field_name = artifact.value.lower()
-                        if getattr(state, field_name, None) is None:
+                        val = state.get(field_name) if isinstance(state, dict) else getattr(state, field_name, None)
+                        if val is None:
                             error_msg = f"Missing artifact {artifact.value} for step {step_to_wrap.step_id}"
                             logger.error(f"[{step_to_wrap.step_id}] ERROR: {error_msg}")
                             if (
@@ -111,9 +139,10 @@ class WorkflowGraphBuilder:
 
                         for artifact in produces:
                             field_name = artifact.value.lower()
+                            state_val = state.get(field_name) if isinstance(state, dict) else getattr(state, field_name, None)
                             if (
                                 updates.get(field_name) is None
-                                and getattr(state, field_name, None) is None
+                                and state_val is None
                             ):
                                 raise ValueError(
                                     f"Agent failed to produce declared artifact: {artifact.value}"
@@ -154,12 +183,11 @@ class WorkflowGraphBuilder:
                             artifacts_produced=len(produces),
                         )
 
-                        available_artifacts = [
-                            art.value
-                            for art in WorkflowArtifact
-                            if getattr(state, art.value.lower(), None) is not None
-                            or art.value.lower() in updates
-                        ]
+                        available_artifacts = []
+                        for art in WorkflowArtifact:
+                            art_val = state.get(art.value.lower()) if isinstance(state, dict) else getattr(state, art.value.lower(), None)
+                            if art_val is not None or art.value.lower() in updates:
+                                available_artifacts.append(art.value)
                         
                         # Serialize outputs safely for logging
                         output_data = {}
@@ -174,6 +202,35 @@ class WorkflowGraphBuilder:
                             updates=output_data,
                             available_artifacts=available_artifacts
                         )
+                        
+                        for name in produced_names:
+                            await event_bus.publish(workflow_id, "artifact_created", {
+                                "step_id": step_to_wrap.step_id,
+                                "agent_name": step_to_wrap.agent_name,
+                                "artifact_name": name
+                            })
+                            
+                        metrics = {}
+                        if "retrieved_chunks" in updates:
+                            rc = updates["retrieved_chunks"]
+                            if hasattr(rc, "chunks"):
+                                metrics["retrieved_chunk_count"] = len(rc.chunks)
+                        if "reasoning_result" in updates:
+                            rr = updates["reasoning_result"]
+                            if hasattr(rr, "confidence_score"):
+                                metrics["confidence_score"] = rr.confidence_score
+                            elif hasattr(rr, "confidence"):
+                                metrics["confidence_score"] = rr.confidence
+                                
+                        await event_bus.publish(workflow_id, "agent_completed", {
+                            "step_id": step_to_wrap.step_id,
+                            "agent_name": step_to_wrap.agent_name,
+                            "duration_ms": round(execution_time * 1000, 2),
+                            "status": "completed",
+                            "progress": 100,
+                            "output_artifacts": produced_names,
+                            "metrics": metrics
+                        })
 
                         return updates
 
@@ -207,6 +264,14 @@ class WorkflowGraphBuilder:
                             artifacts_consumed=len(consumes),
                             artifacts_produced=0,
                         )
+                        
+                        await event_bus.publish(workflow_id, "agent_failed", {
+                            "step_id": step_to_wrap.step_id,
+                            "agent_name": step_to_wrap.agent_name,
+                            "duration_ms": round(execution_time * 1000, 2),
+                            "status": "failed",
+                            "error": error_msg
+                        })
 
                         error_updates: dict[str, Any] = {
                             "failed_steps": [step_to_wrap.step_id],
@@ -225,7 +290,12 @@ class WorkflowGraphBuilder:
             builder.add_edge(step.step_id, "coordinator")
 
         # Human Review Node
-        def human_review_node(state: WorkflowState) -> dict[str, Any]:
+        async def human_review_node(state: WorkflowState) -> dict[str, Any]:
+            from app.workflow.events import event_bus
+            workflow_id = state.get("decision_id", "unknown") if isinstance(state, dict) else getattr(state, "decision_id", "unknown")
+            await event_bus.publish(workflow_id, "workflow_paused", {
+                "reason": "human_review"
+            })
             return {"is_interrupted": True}
 
         builder.add_node("human_review", human_review_node)
@@ -254,6 +324,9 @@ class WorkflowGraphBuilder:
         self, state: WorkflowState
     ) -> list[Send] | Literal["human_review", "replan", "__end__"]:
         """Determine which nodes to run next based on the workflow state."""
+        if not self.context.plan:
+            return "__end__"
+
         if state.requires_replanning:
             return "replan"
 

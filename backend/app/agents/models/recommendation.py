@@ -7,6 +7,7 @@ class RecommendationItem(BaseModel):
     """A single recommended option."""
 
     entity_id: str = Field(description="The ID of the recommended entity")
+    entity_name: str = Field(description="The name of the recommended entity")
     rank: int = Field(description="The rank of this recommendation (1 is highest)")
     final_score: float = Field(description="The final aggregated score")
     contributing_factors: list[str] = Field(

@@ -32,6 +32,8 @@ class RecommendationAgent(BaseAgent):
 
     async def execute(self, state: WorkflowState) -> WorkflowState:
         self.validate_inputs(state)
+        
+        await self.emit_progress(state, "Consolidating reasoning results...")
 
         prompt_content = self._prompt_template.render(
             reasoning_result=(
@@ -45,6 +47,8 @@ class RecommendationAgent(BaseAgent):
             system_prompt="You are a strict recommendation engine. Output only structured data, no explanations.",
             temperature=0.2,
         )
+        
+        await self.emit_progress(state, "Structuring final recommendation...")
 
         if not isinstance(result, RecommendationResult):
             raise TypeError(

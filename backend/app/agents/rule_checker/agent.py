@@ -19,6 +19,8 @@ class RuleCheckerAgent(BaseAgent):
 
     async def execute(self, state: WorkflowState) -> WorkflowState:
         self.validate_inputs(state)
+        
+        await self.emit_progress(state, "Applying deterministic business rules...")
 
         # We need entity data to evaluate.
         # Retrieve entity data from retrieved_chunks metadata based on recommendation.entity_id
@@ -61,6 +63,8 @@ class RuleCheckerAgent(BaseAgent):
 
         is_valid = len(violated_rules) == 0
         requires_replanning = not is_valid
+        
+        await self.emit_progress(state, f"Validation complete. Found {len(violated_rules)} violations and {len(warnings)} warnings.")
 
         result = ValidationResult(
             is_valid=is_valid,

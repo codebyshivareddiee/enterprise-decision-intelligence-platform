@@ -171,6 +171,14 @@ class Recommendation(AuditedModel):
             "recommendation is surfaced to the user."
         ),
     )
+    evidence: list[str] = Field(
+        default_factory=list,
+        description="References to evidence supporting the recommendation.",
+    )
+    rules: list[str] = Field(
+        default_factory=list,
+        description="Business rules that influenced the decision.",
+    )
     triggered_by: UUID = Field(
         ...,
         description="User ID of the person who initiated this recommendation run.",

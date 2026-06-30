@@ -32,6 +32,8 @@ class ExplanationAgent(BaseAgent):
 
     async def execute(self, state: WorkflowState) -> WorkflowState:
         self.validate_inputs(state)
+        
+        await self.emit_progress(state, "Synthesizing reasoning into human-readable explanation...")
 
         prompt_content = self._prompt_template.render(
             recommendation=(
@@ -55,6 +57,8 @@ class ExplanationAgent(BaseAgent):
             system_prompt="You are an explainability engine. Produce clear and traceable reasoning.",
             temperature=0.2,
         )
+        
+        await self.emit_progress(state, "Explanation generated successfully.")
 
         if not isinstance(result, ExplanationResult):
             raise TypeError(

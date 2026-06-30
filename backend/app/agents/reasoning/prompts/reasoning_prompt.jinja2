@@ -18,10 +18,13 @@ No retrieved chunks provided.
 {% endif %}
 
 **Instructions:**
-1. Evaluate the provided entities based on the workspace context, business rules, and retrieved knowledge.
-2. Produce a structured output containing:
-   - A score for each entity.
-   - Detailed reasoning notes explaining the score.
+1. Evaluate the provided entities strictly based on the workspace context, business rules, and retrieved knowledge.
+2. If `Retrieved Knowledge Chunks` is empty, you MUST state that there is insufficient context to evaluate any entities and you MUST NOT invent or evaluate generic entities (e.g. AcmeSoft).
+3. Produce a structured output containing:
+   - `entity_id`: The ID of the entity being evaluated.
+   - `entity_name`: The actual name of the entity found in the chunks.
+   - A score for each entity (must be a float between 0.0 and 1.0).
+   - Detailed reasoning notes explaining the score, explicitly mentioning any hard filters or rules the entity failed.
    - Any missing information needed for a better decision.
    - Any risks or opportunities identified.
-3. NEVER make final recommendations. Your job is solely to reason and score.
+4. NEVER make final recommendations. Your job is solely to reason and score.

@@ -45,3 +45,16 @@ class BaseAgent(ABC):
             MissingArtifactError: If required input artifacts are missing.
         """
         ...
+        
+    async def emit_progress(self, state: WorkflowState, message: str) -> None:
+        """Helper to stream progress messages to the frontend inspector."""
+        from app.workflow.events import event_bus
+        
+        workflow_id = getattr(state, "decision_id", None)
+        step_id = getattr(state, "current_step_id", None)
+        
+        if workflow_id and step_id:
+            await event_bus.publish(workflow_id, "agent_stream", {
+                "step_id": step_id,
+                "delta": message + "\n"
+            })
